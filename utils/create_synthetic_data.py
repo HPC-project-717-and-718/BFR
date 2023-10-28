@@ -8,7 +8,7 @@ dimensions = sys.argv[2]
 if not int(dimensions) >= 2:
     sys.exit("Dimensions must be 2 or higher.")
 
-number_of_points = int(dimensions) * 20
+number_of_points = int(dimensions) * 2000
 number_of_gaussians = 10
 minimum_mean, maximum_mean = -5, 5
 minimum_covariance, maximum_covariance = 0.7, 1.5
