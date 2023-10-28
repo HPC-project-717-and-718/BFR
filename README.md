@@ -37,10 +37,6 @@ Github repository for the HPC course's project - Parallelization of the BFR algo
 The folders are organized as the following:
 
 - ```data``` contains the datasets used by the BFR algorithm, with  ```synthetic``` being the folder containing data directly sampled from gaussians built with the data creation script
-<br>
--```output``` contains the algorithms' output file(s)
-<br>
--```src``` contains the algorithm's source code
-<br>
--```utils``` contains useful files, notes and scripts used throughout the project's development cycle
-<br>
+- ```output``` contains the algorithms' output file(s)
+- ```src``` contains the algorithm's source code
+- ```utils``` contains useful files, notes and scripts used throughout the project's development cycle
