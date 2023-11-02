@@ -1,0 +1,82 @@
+streaming data
+Clusters:
+Cluster 0: 3.000000 2.875000 
+Cluster 0 size: 8
+Cluster 0 sum: 24 23 
+Cluster 0 sum_squares: 97 103 
+Cluster 1: 9.000000 0.000000 
+Cluster 1 size: 0
+Cluster 1 sum: 0 0 
+Cluster 1 sum_squares: 0 0 
+Compressed Sets:
+Set 0 size: 450
+Set 0 sum: -319 556 
+Set 0 sum_squares: 2500 1577 
+Retained Set:
+Point 0: -4.831270 -0.138360 
+streaming data
+Clusters:
+Cluster 0: 1.551020 2.316327 
+Cluster 0 size: 196
+Cluster 0 sum: 304 454 
+Cluster 0 sum_squares: 937 1736 
+Cluster 1: 9.000000 0.000000 
+Cluster 1 size: 0
+Cluster 1 sum: 0 0 
+Cluster 1 sum_squares: 0 0 
+Compressed Sets:
+Set 0 size: 915
+Set 0 sum: -1551 1050 
+Set 0 sum_squares: 7087 2843 
+Retained Set:
+Point 0: -4.831270 -0.138360 
+streaming data
+Clusters:
+Cluster 0: 1.429319 2.209424 
+Cluster 0 size: 382
+Cluster 0 sum: 546 844 
+Cluster 0 sum_squares: 1802 3138 
+Cluster 1: 9.000000 0.000000 
+Cluster 1 size: 0
+Cluster 1 sum: 0 0 
+Cluster 1 sum_squares: 0 0 
+Compressed Sets:
+Set 0 size: 1516
+Set 0 sum: -3341 1686 
+Set 0 sum_squares: 14307 4454 
+Retained Set:
+Point 0: -4.831270 -0.138360 
+streaming data
+Clusters:
+Cluster 0: 1.328671 2.215035 
+Cluster 0 size: 572
+Cluster 0 sum: 760 1267 
+Cluster 0 sum_squares: 2597 4690 
+Cluster 1: 9.000000 0.000000 
+Cluster 1 size: 0
+Cluster 1 sum: 0 0 
+Cluster 1 sum_squares: 0 0 
+Compressed Sets:
+Set 0 size: 2193
+Set 0 sum: -5440 2395 
+Set 0 sum_squares: 23078 6395 
+Retained Set:
+Point 0: -4.831270 -0.138360 
+breaking false.
+streaming data
+Clusters:
+Cluster 0: 1.328671 2.215035 
+Cluster 0 size: 572
+Cluster 0 sum: 760 1267 
+Cluster 0 sum_squares: 2597 4690 
+Cluster 1: 9.000000 0.000000 
+Cluster 1 size: 0
+Cluster 1 sum: 0 0 
+Cluster 1 sum_squares: 0 0 
+Compressed Sets:
+Set 0 size: 2193
+Set 0 sum: -5440 2395 
+Set 0 sum_squares: 23078 6395 
+Retained Set:
+Point 0: -4.831270 -0.138360 
+breaking true.
