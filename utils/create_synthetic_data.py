@@ -9,7 +9,7 @@ if not int(dimensions) >= 2:
     sys.exit("Dimensions must be 2 or higher.")
 
 number_of_points = int(dimensions) * 2000
-number_of_gaussians = 10
+number_of_gaussians = 2
 minimum_mean, maximum_mean = -5, 5
 minimum_covariance, maximum_covariance = 0.7, 1.5
 
@@ -40,6 +40,7 @@ weights_count = np.zeros(number_of_gaussians)
 for i in range(number_of_points):
     # choose a gaussian by weight
     gaussian = np.random.choice(number_of_gaussians, p=weights)
+    # gaussian = np.random.choice(number_of_gaussians, p=[0.5, 0.5])
 
     #count how many times each gaussian is chosen
     weights_count[gaussian] += 1
@@ -47,9 +48,13 @@ for i in range(number_of_points):
     # generate a point from the gaussian
     points[i] = np.random.multivariate_normal(means[gaussian], covariances_diagonal[gaussian])
 
-    # print point in output file
+    # print point in output file with space between coordinates and ten decimal points
+    
     for j in range(int(dimensions)):
-        output.write(str(points[i][j]) + "\t")
+        # output.write(str(points[i][j]) + " ")
+        output.write("{:.5f}".format(points[i][j]))
+        if j < int(dimensions) - 1:
+            output.write(" ")
     output.write("\n")
 
 # print weights count
