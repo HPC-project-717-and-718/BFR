@@ -9,8 +9,8 @@
 #define S 100 // sample size
 #define T 3.5 // threshold
 #define LIMIT_S 10 //limit for rand generation of coordinates for initial centroids
-#define data_streamer FILE * // data streamer type
-#define MAX_SIZE_OF_BUFFER 1024 // max size of buffer in chars
+#define MAX_SIZE_OF_BUFFER 1000 // max size of buffer in points
+#define data_streamer FILE* // data streamer type
 
 typedef struct {
     double coords[M];
@@ -199,7 +199,7 @@ void update_cluster(Cluster * cluster, Point p){
     }
 }
 
-bool read_point(char ** data_buffer, Point * p, long int size_of_data_buffer, int * offset){
+bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, int * offset){
     /*
     * Read a point from data buffer
     *
@@ -223,18 +223,13 @@ bool read_point(char ** data_buffer, Point * p, long int size_of_data_buffer, in
 
     //read M coordinates from data buffer
     //TODO: check if this is the correct way to read from buffer
+    // ---> assuming that the interpretation of the buffer as a static array of point is valid, this should be fixed
     int i = 0;
     for (i = 0; i < M; i++){
         //points are in the format: n sequence of numbers dot numbers separated by space
-        //it has to be converted to float and then stored in the point
-        char * end;
-        p->coords[i] = strtod(*data_buffer + *offset, &end);
-        *offset = end - *data_buffer + 1;
-
-        if (*offset >= size_of_data_buffer){
-            return false;
-        }
+        p->coords[i] = (data_buffer[*offset]).coords[i];
     }
+    (*offset)++;
     return true;
 }
 
@@ -409,7 +404,7 @@ bool primary_compression_criteria(Cluster * clusters, Point p){
 
 }
 
-void stream_data(RetainedSet * R, Cluster * clusters, CompressedSets * C, char ** data_buffer, long int size_of_data_buffer){
+void stream_data(RetainedSet * R, Cluster * clusters, CompressedSets * C, Point * data_buffer, long int size_of_data_buffer){
 
     /*
     1. read point from buffer
@@ -626,26 +621,52 @@ data_streamer data_streamer_Init(char * file_name, char * mode, long * size_of_f
     return file;
 }
 
-bool load_data_buffer(data_streamer stream_cursor, char ** data_buffer, long * size_of_file, int max_size_of_buffer, long * size_of_data_buffer){
+bool load_data_buffer(data_streamer stream_cursor, Point * data_buffer, long * size_of_file, int max_size_of_buffer, long * size_of_data_buffer){
     if (stream_cursor == NULL){
         printf("Error: invalid stream cursor\n");
         exit(1);
     }
 
-    if (*data_buffer == NULL){
-        *data_buffer = malloc(max_size_of_buffer * sizeof(char));
-        if (*data_buffer == NULL){
-            printf("Error: could not allocate memory\n");
-            return false;
+    // if ((void*)data_buffer == NULL){
+    //     data_buffer = (Point *)malloc(max_size_of_buffer * sizeof(Point));
+    //     if ((void*)data_buffer == NULL){
+    //         printf("Error: could not allocate memory\n");
+    //         return false;
+    //     }
+    // }
+    
+    // fills data_buffer with MAX_SIZE_OF_BUFFER points or until EOF is reached
+    int i, j, counter = 0, return_val;
+    float x;
+
+    for (i = 0; i < MAX_SIZE_OF_BUFFER; i++){
+        Point p;
+        for (j = 0; j < M; j++){
+            return_val = fscanf(stream_cursor, "%f", &x);
+
+            if (return_val == EOF && i==0 && j==0) {
+                // first iteration of the loops, buffer is empty, end algorithm
+                return true;
+            }
+            else if (return_val == EOF) {
+                // buffer is not empty - do another iteration, end at the next one.
+                return false;
+            }
+
+            p.coords[j] = (double) x;
+            data_buffer[i] = p;
         }
+        counter++;
     }
 
-    *size_of_data_buffer = fread(*data_buffer, 1, max_size_of_buffer, stream_cursor);
-    if (*size_of_data_buffer == 0){
-        return true;
-    }
+    *size_of_data_buffer = counter;
+    // *size_of_data_buffer = fread(*data_buffer, 1, max_size_of_buffer, stream_cursor);
+    // if (*size_of_data_buffer == 0){
+    //     return true;
+    // }
 
     //TODO: check if the size of data respect the point format: n floats separated by space
+    // ---> now data should be read regardless of format
 
     return false;
 }
@@ -668,18 +689,19 @@ int main(int argc, char ** argv){
 
     CompressedSets C = init_compressed_sets();
 
+    Point data_buffer[MAX_SIZE_OF_BUFFER];
+
     //start reading block points from input file
     bool stop_criteria = false;
     do{ 
-        char * data_buffer = NULL;
         long size_of_data_buffer = 0;
-        stop_criteria = load_data_buffer(stream_cursor, &data_buffer, &size_of_file, MAX_SIZE_OF_BUFFER, &size_of_data_buffer);
+        stop_criteria = load_data_buffer(stream_cursor, data_buffer, &size_of_file, MAX_SIZE_OF_BUFFER, &size_of_data_buffer);
 
         if(stop_criteria == false){
-            printf("data buffer: %s\n", data_buffer);
+            // printf("data buffer: %s\n", data_buffer);
             //stream data
             //TODO: proposition to change the name of this function, in order to make it more clear
-            stream_data(&R, clusters, &C, &data_buffer, size_of_data_buffer);
+            stream_data(&R, clusters, &C, data_buffer, size_of_data_buffer);
 
             //update centroids
             update_centroids(&clusters, K);
@@ -695,9 +717,9 @@ int main(int argc, char ** argv){
         }
 
 
-        if (data_buffer != NULL){
-            free(data_buffer);
-        }
+        // if (data_buffer != NULL){
+        //     free(data_buffer);
+        // }
     }while(stop_criteria == false);
     
     free(clusters);
