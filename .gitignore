@@ -1,0 +1,9 @@
+#ignore output results, for now
+/output/*
+!/output/gitkeep
+
+#ignore binaries
+/src/bfr_serial
+
+#ignore test plots
+/utils/test*
