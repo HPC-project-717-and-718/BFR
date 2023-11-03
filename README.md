@@ -13,6 +13,7 @@ Github repository for the HPC course's project - Parallelization of the BFR algo
 │       ├── synthetic_d10.txt
 │       ├── synthetic_d2.txt
 │       ├── synthetic_d2_4000points.txt
+│       ├── synthetic_d2_4000points_2gaussians.txt
 │       ├── synthetic_d3.txt
 │       ├── synthetic_d3_6000points.txt
 │       ├── synthetic_d4.txt
@@ -37,6 +38,8 @@ Github repository for the HPC course's project - Parallelization of the BFR algo
 │   └── kmeans_wrapper
 │       ├── kmeans_wrapper.c
 │       └── kmeans_wrapper.h
+├── output
+│   └── .gitkeep
 ├── src
 │   ├── BFR_serial.c
 │   └── bfr_serial

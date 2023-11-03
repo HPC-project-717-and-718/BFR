@@ -17,9 +17,9 @@ dimension_axis = [[] for _ in range(dimensions)]
 
 # transform points to float
 for i in range(len(points)):
-    points[i] = points[i].split("\t")
+    points[i] = points[i].split(" ")
     # remove element containing \n
-    points[i].pop()
+    # points[i].pop()
     for j in range(dimensions):
         points[i][j] = float(points[i][j])
         dimension_axis[j].append(points[i][j])
@@ -30,27 +30,36 @@ fig, ax = plt.subplots()
 
 plt.scatter(dimension_axis[0], dimension_axis[1], marker='o', color='b', s=0.5, label='Data Points')
 
-
-clusters = {
-    0: {'centroid': [2.350181, 3.919374], 'count': 831, 'variance': [9707/831 - (1953/831)**2, 16560/831 - (3257/831)**2]},
-    1: {'centroid': [5.115044, 2.592920], 'count': 113, 'variance': [3576/113 - (578/113)**2, 1094/113 - (293/113)**2]},
-    2: {'centroid': [1.703704, 1.386831], 'count': 243, 'variance': [1574/243 - (414/243)**2, 934/243 - (337/243)**2]},
-    8: {'centroid': [-0.834615, 1.671795], 'count': 1560, 'variance': [4057/1560 - (-1302/1560)**2, 9948/1560 - (2608/1560)**2]},
-    9: {'centroid': [-0.840909, 5.954545], 'count': 44, 'variance': [73/44 - (-37/44)**2, 1786/44 - (262/44)**2]}
-}
+# Read the cluster data from the file
+cluster_data = {}
+with open('src/cluster_data.txt', 'r') as f:
+    lines = f.readlines()
+    for i in range(0, len(lines), 4):  # Adjust for the correct structure of the file
+        cluster_index = i  # Extract cluster index
+        centroid = [float(val) for val in lines[i].split(":")[-1].strip().split()]
+        count = int(lines[i + 1].split(":")[-1].strip().split()[0])
+        sum_values = [float(val) for val in lines[i + 2].split(":")[-1].strip().split()]
+        sum_squares_values = [float(val) for val in lines[i + 3].split(":")[-1].strip().split()]
+        variance = [(sum_squares_values[j] / count) - (sum_values[j] / count) ** 2 for j in range(dimensions)]
+        cluster_data[cluster_index] = {'centroid': centroid, 'count': count, 'variance': variance}
+# print(cluster_data)
 
 # Define a list of colors
-colors = ['r', 'g', 'b', 'c', 'm']
+colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'orange', 'purple', 'lime']
 
 # Create plot and add ellipses with different colors
-for i, cluster in clusters.items():
-    std_deviation_x = math.sqrt(cluster['variance'][0])
-    std_deviation_y = math.sqrt(cluster['variance'][1])
-    ellipse = patches.Ellipse(cluster['centroid'], std_deviation_x*3, std_deviation_y*3, alpha=0.5, label=f'Cluster {i}', color=colors[i % len(colors)])
+for i, cluster in cluster_data.items():
+    std_deviation_x = math.sqrt(abs(cluster['variance'][0]))
+    std_deviation_y = math.sqrt(abs(cluster['variance'][1]))
+    count = cluster['count']
+    ellipse = patches.Ellipse(cluster['centroid'], std_deviation_x*3.5, std_deviation_y*3.5, alpha=0.5,
+                              label=f'Cluster {i}', color=colors[i % len(colors)])
     ax.add_patch(ellipse)
 
 # Set aspect to equal to ensure circular shape
-# ax.set_aspect('equal', adjustable='box')
+ax.set_aspect('equal', adjustable='box')
+
+# Adjust the x and y axis limits
 padding = 1.0  # adjust as needed
 plt.xlim(min(dimension_axis[0]) - padding, max(dimension_axis[0]) + padding)
 plt.ylim(min(dimension_axis[1]) - padding, max(dimension_axis[1]) + padding)
