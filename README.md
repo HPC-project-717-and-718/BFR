@@ -63,4 +63,4 @@ The folders are organized as the following:
 ## How to use
 
 Compile with:
-```gcc src/BFR_serial.c lib/bfr_structures/bfr_structures.c -o src/bfr_serial -lm
+```gcc src/BFR_serial.c lib/kmeans_wrapper/kmeans_wrapper.c lib/kmeans/kmeans.c lib/bfr_structures/bfr_structures.c  -o src/bfr_serial -lm

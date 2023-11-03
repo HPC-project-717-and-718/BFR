@@ -40,7 +40,7 @@ CompressedSets init_compressed_sets(){
     return C;
 }
 
-Cluster * init_cluster(){
+Cluster * init_cluster(int k){
     /*
     * Initialize clusters
     *
@@ -67,8 +67,8 @@ Cluster * init_cluster(){
         int j = 0;
         for (j = 0; j < M; j++){
             c.centroid.coords[j] = 0.;
-            c.sum[j] = 0;
-            c.sum_squares[j] = 0;
+            c.sum[j] = 0.;
+            c.sum_squares[j] = 0.;
         }
         c.size = 0;
         c.index = i;
@@ -77,7 +77,6 @@ Cluster * init_cluster(){
 
     return clusters;
 }
-
 
 
 void print_clusters(Cluster * clusters){
@@ -96,7 +95,7 @@ void print_clusters(Cluster * clusters){
         printf("Cluster %d sum: ", i);
 
         for (j = 0; j < M; j++){
-            printf("%d ", clusters[i].sum[j]);
+            printf("%lf ", clusters[i].sum[j]);
         }
 
         printf("\n");
@@ -104,7 +103,7 @@ void print_clusters(Cluster * clusters){
         printf("Cluster %d sum_squares: ", i);
 
         for (j = 0; j < M; j++){
-            printf("%d ", clusters[i].sum_squares[j]);
+            printf("%lf ", clusters[i].sum_squares[j]);
         }
 
         printf("\n");
@@ -135,13 +134,25 @@ void print_compressedsets(CompressedSets C){
 
 void print_retainedset(RetainedSet R){
     printf("Retained Set:\n");
+    printf("Retained Set size: %d\n", R.number_of_points);
     int i = 0;
-    for (; i < R.number_of_points; i++){
-        printf("Point %d: ", i);
-        int j = 0;
-        for (j = 0; j < M; j++){
-            printf("%lf ", R.points[i].coords[j]);
-        }
-        printf("\n");
+    // for (; i < R.number_of_points; i++){
+    //     printf("Point %d: ", i);
+    //     int j = 0;
+    //     for (j = 0; j < M; j++){
+    //         printf("%lf ", R.points[i].coords[j]);
+    //     }
+    //     printf("\n");
+    // }
+}
+
+
+void add_point_to_retained_set(RetainedSet * R, Point p){
+    (*R).number_of_points += 1;
+    (*R).points = realloc(R->points, R->number_of_points * sizeof(Point));
+    if (R->points == NULL){
+        printf("Error: could not allocate memory\n");
+        exit(1);
     }
+    (*R).points[R->number_of_points - 1] = p;
 }

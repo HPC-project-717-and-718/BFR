@@ -1,6 +1,9 @@
 #ifndef BFR_STRUCTURES
 #define BFR_STRUCTURES
+
+
 #include "../definitions.h"
+
 
 typedef struct {
     double coords[M];
@@ -10,8 +13,8 @@ typedef struct {
 typedef struct {
     Point centroid;
     int size;
-    int sum[M];
-    int sum_squares[M];
+    double sum[M];
+    double sum_squares[M];
     int index;
 } Cluster;
 
@@ -34,12 +37,14 @@ typedef struct {
 
 RetainedSet init_retained_set();
 CompressedSets init_compressed_sets();
-Cluster * init_cluster();
+Cluster * init_cluster(int k);
 
 
 void print_clusters(Cluster * clusters);
 void print_compressedsets(CompressedSets C);
 void print_retainedset(RetainedSet R);
 
+
+void add_point_to_retained_set(RetainedSet * R, Point p);
 
 #endif
