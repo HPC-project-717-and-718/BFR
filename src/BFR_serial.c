@@ -1,123 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <math.h>
-#include <time.h>
+#include "../lib/kmeans_wrapper/kmeans_wrapper.h"
 
-#define K 2 // number of clusters
-#define M 2 // number of dimensions
-#define S 100 // sample size
-#define T 3.5 // threshold
-#define LIMIT_S 10 //limit for rand generation of coordinates for initial centroids
-
-typedef struct {
-    double coords[M];
-    int cluster;
-} Point;
-
-typedef struct {
-    Point centroid;
-    int size;
-    int sum[M];
-    int sum_squares[M];
-    int index;
-} Cluster;
-
-typedef struct {
-    Point * points;
-    int number_of_points;
-} RetainedSet;
-
-typedef struct {
-    int number_of_points;
-    int sum[M];
-    int sum_square[M];
-} CompressedSet;
-
-typedef struct {
-    CompressedSet * sets;
-    int number_of_sets;
-} CompressedSets;
-
-RetainedSet init_retained_set(){
-    /*
-    * Initialize retained set
-    *
-    * Algorithm:
-    *   1. allocate memory for retained set
-    *   2. initialize retained set as NULL
-    *
-    * Parameters:
-    *   - void
-    *
-    * Returns:
-    *   - retained set
-    */
-    RetainedSet R;
-    R.points = NULL;
-    R.number_of_points = 0;
-    return R;
-}
-
-CompressedSets init_compressed_sets(){
-    /*
-    * Initialize compressed sets
-    *
-    * Algorithm:
-    *   1. allocate memory for compressed sets
-    *   2. initialize each compressed set as NULL
-    *
-    * Parameters:
-    *   - void
-    *
-    * Returns:
-    *   - array of compressed sets
-    */
-    CompressedSets C;
-    C.sets = NULL;
-    C.number_of_sets = 0;
-    return C;
-}
-
-Cluster * init_cluster(){
-    /*
-    * Initialize clusters
-    *
-    * Algorithm:
-    *   1. allocate memory for clusters
-    *   2. initialize each cluster
-    *
-    * Parameters:
-    *   - void
-    *
-    * Returns:
-    *   - array of clusters
-    */
-    Cluster * clusters = malloc(K * sizeof(Cluster));
-    
-    if (clusters == NULL){
-        printf("Error: could not allocate memory\n");
-        exit(1);
-    }
-
-    int i = 0;
-    for (i = 0; i < K; i++){
-        Cluster  c;
-        int j = 0;
-        for (j = 0; j < M; j++){
-            c.centroid.coords[j] = 0;
-            c.sum[j] = 0;
-            c.sum_squares[j] = 0;
-        }
-        c.size = 0;
-        c.index = i;
-        clusters[i] = c;
-    }
-
-    return clusters;
-}
-
-void take_k_centroids(Cluster *clusters, FILE * input_file){
+void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_buffer){
     /*
     * Take K random centroids from input space
     *
@@ -138,39 +21,18 @@ void take_k_centroids(Cluster *clusters, FILE * input_file){
         // centroid are random points in N^M space
         Point p;
         int j = 0;
+        int r = lround(size_of_data_buffer * (1.0 * rand() / RAND_MAX));
         for (j = 0; j < M; j++){
+            /* Pointers to the randomly picked point */
             
-            p.coords[j] = rand() % 10;
+            p.coords[j] = data_buffer[r].coords[j];
+            clusters[i].sum[j] += p.coords[j];
+            clusters[i].sum_squares[j] += pow(p.coords[j], 2);
         }
         p.cluster = i;
         clusters[i].centroid = p;
+        clusters[i].size = 1;
     }
-}
-
-double distance(Point p1, Point p2){
-    /*
-    * Calculate euclidean distance between two points
-    *
-    * Algorithm:
-    *   1. calculate sum of squares of differences between coordinates of two points
-    *   2. calculate square root of sum
-    *   
-    * Parameters:
-    *   - p1: first point
-    *   - p2: second point
-    *
-    * Returns:
-    *   - distance between two points as double
-    */
-    double sum = 0;
-    int i = 0;
-    for (i = 0; i < M; i++){
-        sum += (p1.coords[i] - p2.coords[i]) * (p1.coords[i] - p2.coords[i]);
-    }
-    sum = sqrt(sum);
-
-    printf("distance: %lf\n", sum);
-    return sum;
 }
 
 void update_cluster(Cluster * cluster, Point p){
@@ -197,29 +59,37 @@ void update_cluster(Cluster * cluster, Point p){
     }
 }
 
-bool read_point(FILE * input_file, Point * p){
+bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, int * offset){
     /*
-    * Read a point from input file
+    * Read a point from data buffer
     *
     * Algorithm:
-    *   1. read M coordinates from input file
-    *   2. if EOF is reached return false
+    *   1. read M coordinates from data buffer
+    *   2. if data buffer end is reached return false
     *   3. else return true
     *
     * Parameters:
-    *   - input_file: file to read point from
+    *   - data_buffer: buffer to read data from
     *   - p: point to read
     *
     * Returns:
     *   - true if point is read successfully
     *   - false if EOF is reached
     */
+
+    if(DEBUG) printf("  Reading point.\n");
+    if (*offset >= size_of_data_buffer){
+        return false;
+    }
+
+    //read M coordinates from data buffer
+    //TODO: check if this is the correct way to read from buffer
+    // ---> assuming that the interpretation of the buffer as a static array of point is valid, this should be fixed
     int i = 0;
     for (i = 0; i < M; i++){
-        if (fscanf(input_file, "%lf", &p->coords[i]) == EOF){
-            return false;
-        }
+        p->coords[i] = (data_buffer[*offset]).coords[i];
     }
+    (*offset)++;
     return true;
 }
 
@@ -278,164 +148,280 @@ void merge_points(Point * p1, Point * p2, CompressedSets * C, RetainedSet * R){
     R->points = realloc(R->points, R->number_of_points * sizeof(Point));
 }
 
-void stream_data(RetainedSet * R, Cluster * clusters, CompressedSets * C, FILE * input_file){
-
+Point perturbate_centroid(Cluster cluster, Point p, bool is_first){
     /*
-    1. read point from input file
-    2. find if point is close enough to some centroid
-    3. if it is, add it to the cluster
-    4. if it is not, decide if add point to compressed set or retained set
+    * Perturbate centroid
+    *
+    * Algorithm:
+    *   1. calculate confidence interval
+    *   2. perturbate centroid
+    *
+    * Parameters:
+    *   - cluster: cluster to perturbate centroid
+    *   - p: point to check
+    *   - is_first: flag to check if it is the first centroid
+    *
+    * Returns:
+    *   - perturbated centroid
+    */
 
+    //TODO: the calculation of confidence interval is not decided, this is just a proposition
+    double confidence_interval = 0;
+    int i = 0;
+    for (i = 0; i < M; i++){
+        double mean = (double) cluster.sum[i] / (double) cluster.size;
+        double variance = (double) cluster.sum_squares[i] / (double) cluster.size - pow(mean, 2);
+        double standard_deviation = sqrt(variance);
+        confidence_interval += pow(standard_deviation, 2);
+    }
+    confidence_interval = sqrt(confidence_interval);
+
+    //TODO: the perturbation of centroid is not decided, this is just a prototype, it has to changed
+    Point pertubated_centroid;
+    if (is_first){
+        pertubated_centroid = cluster.centroid;
+        int j = 0;
+        for (j = 0; j < M; j++){
+            pertubated_centroid.coords[j] += confidence_interval;
+        }
+    }else{
+        pertubated_centroid = cluster.centroid;
+        int j = 0;
+        for (j = 0; j < M; j++){
+            pertubated_centroid.coords[j] -= confidence_interval;
+        }
+    }
+
+    return pertubated_centroid;
+}
+
+bool primary_compression_criteria(Cluster * clusters, Point p){
+    /*
+    * Idea:
+    * Use the Mahalanobis distance to determine whether or not a point 
+    * can be added directly to a cluster.
+    *
+    * Algorithm:
+    *   1. check if point is close enough to some centroid, by using mahalanobis radius as a confidence measure
+    *   2. if it is, add it to the cluster
+    *   3. if not check the secondary compression criteria
+    *
+    * Parameters:
+    *   - clusters: array of clusters
+    *   - p: point to check
+    *
+    * Returns:
+    *   - true if point is added to cluster
+    *   - false if point is not added to cluster
+    * IMPORTANT: the two primary compression criteria are separate and mutually exclusive!
+    */
+
+    int i = 0, min_cluster;
+    double current_distance, min_distance = DBL_MAX;
+
+    if(DEBUG) printf("      Checking mahalanobis distance for point.\n");
+    for (i = 0; i < K; i++){
+        current_distance = mahalanobis_distance(clusters[i], p);
+        // if(DEBUG) printf("      Current distance: %lf.\n", current_distance);
+        if (current_distance < min_distance) {
+            min_distance = current_distance;
+            min_cluster = i;
+        }
+    }
+
+    if (min_distance < T){
+        if(DEBUG) printf("      Minimal distance is %lf and is under threshold, updating cluster %d with point.\n", min_distance, min_cluster);
+        //add point to cluster whose distance from the centroid is minimal
+        update_cluster(&clusters[min_cluster], p);
+        if(DEBUG) printf("      Cluster %d updated.\n", min_cluster);
+        return true;
+    }
+    
+    if(DEBUG) printf("      No cluster fits the criteria, minimal distance is %lf.\n", min_distance);
+
+    return false;
+
+}
+
+bool second_primary_compression_criteria(Cluster * clusters, Point p){
+    /*
+    * Idea:
+    * Takes the two closest centroids 
+    * if after pertubation of centroids in confidence interval in purpose to set first centroid most far away from the point
+    * and the second centroid most close to the point
+    * if the point is still close to the first centroid, add it to the cluster
+    *
+    * Algorithm:
+    *   1. take the two closest centroids
+    *   2. if after pertubation of centroids in confidence interval in purpose to set first centroid most far away from the point
+    *   3. and the second centroid most close to the point
+    *   4. if the point is still close to the first centroid, add it to the cluster
+    *   5. if not check the secondary compression criteria
+    *
+    * Parameters:
+    *   - clusters: array of clusters
+    *   - p: point to check
+    *
+    * Returns:
+    *   - true if point is added to cluster
+    *   - false if point is not added to cluster
+    * IMPORTANT: the two primary compression criteria are separate and mutually exclusive!
+    */
+
+    //take the two closest centroids
+    double min_distance = distance((Pointer)&(clusters[0].centroid), (Pointer)&p);
+    int index_of_min = 0;
+    double second_min_distance = distance((Pointer)&(clusters[1].centroid), (Pointer)&p);
+    int index_of_second_min = 1;
+    int i;
+
+    for (i = 1; i < K; i++){
+        double dist = distance((Pointer)&(clusters[i].centroid), (Pointer)&p);
+        if (dist < min_distance){
+            second_min_distance = min_distance;
+            index_of_second_min = index_of_min;
+            min_distance = dist;
+            index_of_min = i;
+        }else if (dist < second_min_distance){
+            second_min_distance = dist;
+            index_of_second_min = i;
+        }
+    }
+
+    Point pertubated_centroid_1 = perturbate_centroid(clusters[index_of_min], p, true); 
+    Point pertubated_centroid_2 = perturbate_centroid(clusters[index_of_second_min], p, false);
+
+    if (distance((Pointer)&pertubated_centroid_1, (Pointer)&p) < distance((Pointer)&pertubated_centroid_2, (Pointer)&p)){
+        //add point to cluster
+        update_cluster(&clusters[index_of_min], p);
+        return true;
+    }
+
+    return false;
+}
+
+void secondary_compression_criteria(RetainedSet * R, Cluster * clusters, CompressedSets * C){
+    /*
+    * Idea:
+    * find a way to aggregate the retained set into miniclusters,
+    * and miniclusters with more than one element can be summarized in the compressed set.
+    * Outliers are kept in the retained set.
+    *
+    * Algorithm:
+    *   1. cluster retained set R with classical K-Means, creating k2 clusters
+    *   2. clusters with more than one point in it are added to CompressedSets C
+    *   3. outliers are kept in the RetainedSet R
+    *   4. try aggregating compressed sets using statistics
+    *
     * Parameters:
     *   - R: retained set
     *   - clusters: array of clusters
     *   - C: compressed sets
-    *   - input_file: file to read points from
     *
     * Returns:
     *   - void
     */
 
-    printf("streaming data\n");
-    Point p;
-    while (read_point(input_file, &p)){
-        // find if point is close enough to some centroid
-        // if it is, add it to the cluster
-        bool flag = false;
-        int i = 0;
-        for (i = 0; i < K && !flag; i++){
-            if (distance(p, clusters[i].centroid) < T){
-                printf("point is close to centroid\n");
-                flag = true;
+    // aggregate retained set into miniclusters
+    // TODO: decide the number of clusters. for now, set as K but by specs should be k2>K
+    if(DEBUG) printf("      Creating miniclusters from Retained Set.\n");
+    Cluster *miniclusters = cluster_retained_set(R, K);
 
-                update_cluster(&clusters[i], p);
-            }
-        }
+    // TODO: add miniclusters to clusters and then fuse them together when possible
 
-        if (!flag){
-            // decide if add point to compressed set or retained set
-            // iter over compressed set decide if add to one of the sets if distance between the center of the set and the point is less than T
-            // the center of the set is the coordinates in each dimension divided by number of points in the set
-            // if point is not added to any set, add it to retained set
-            printf("point is not close to any centroid\n");
+    if(DEBUG) printf("      Freeing miniclusters.\n");
+    free(miniclusters);
 
-            if (C->number_of_sets > 0){
-                int size_of_C = C->number_of_sets;
-                int j = 0;
-                for (j = 0; j < size_of_C; j++){
-                    //calculate center of set
-                    Point center;
-                    int k = 0;
-                    for (k = 0; k < M; k++){
-                        center.coords[k] = C->sets[j].sum[k] / C->sets[j].number_of_points;
-                    }
-                    if (distance(p, center) < T){
-                        //add point to set
-                        C->sets[j].number_of_points += 1;
-                        int k = 0;
-                        for (k = 0; k < M; k++){
-                            C->sets[j].sum[k] += p.coords[k];
-                            C->sets[j].sum_square[k] += pow(p.coords[k], 2);
-                        }
-                        break;
-                    }
-                }
-            }else{
-                //check if point is close to any point in retained set
-                // in this case merge the two points and create a new compressed set
-                bool is_close = false;
-                int size_of_R = R->number_of_points;
-                int j = 0;
-                for (j = 0; j < size_of_R; j++){
-                    if (distance(p, R->points[j]) < T){
-                        //merge points
-                        merge_points(&p, &R->points[j], C, R);
-                        is_close = true;
-                        break;
-                    }
-                }
+    // if (C->number_of_sets > 0){
+    //     int size_of_C = C->number_of_sets;
+    //     int j = 0;
+    //     for (j = 0; j < size_of_C; j++){
+    //         // calculate center of set
+    //         Point center;
+    //         int k = 0;
+    //         for (k = 0; k < M; k++){
+    //             center.coords[k] = C->sets[j].sum[k] / C->sets[j].number_of_points;
+    //         }
+    //         if (distance(p, center) < T){
+    //             // add point to set
+    //             C->sets[j].number_of_points += 1;
+    //             int k = 0;
+    //             for (k = 0; k < M; k++){
+    //                 C->sets[j].sum[k] += p.coords[k];
+    //                 C->sets[j].sum_square[k] += pow(p.coords[k], 2);
+    //             }
+    //             break;
+    //         }
+    //     }
+    // }
+    // else{
+    //     // check if point is close to any point in retained set
+    //     //  in this case merge the two points and create a new compressed set
+    //     bool is_close = false;
+    //     int size_of_R = R->number_of_points;
+    //     int j = 0;
+    //     for (j = 0; j < size_of_R; j++){
+    //         if (distance(p, R->points[j]) < T){
+    //             // merge points
+    //             merge_points(&p, &R->points[j], C, R);
+    //             is_close = true;
+    //             break;
+    //         }
+    //     }
 
-                if(!is_close){
-                    //add point to retained set
-                    (*R).number_of_points += 1;
-                    (*R).points = realloc(R->points, R->number_of_points * sizeof(Point));
-                    if (R->points == NULL){
-                        printf("Error: could not allocate memory\n");
-                        exit(1);
-                    }
-                    (*R).points[R->number_of_points - 1] = p;
-                }
-                
-            }
-
-        }
-    }
+    //     if (!is_close){
+    //         // add point to retained set
+    //         (*R).number_of_points += 1;
+    //         (*R).points = realloc(R->points, R->number_of_points * sizeof(Point));
+    //         if (R->points == NULL){
+    //             printf("Error: could not allocate memory\n");
+    //             exit(1);
+    //         }
+    //         (*R).points[R->number_of_points - 1] = p;
+    //     }
+    // }
 }
 
-void print_clusters(Cluster * clusters){
-    printf("Clusters:\n");
-    int i = 0;
-    for (i = 0; i < K; i++){
-        printf("Cluster %d: ", i);
-        int j = 0;
-        for (j = 0; j < M; j++){
-            printf("%lf ", clusters[i].centroid.coords[j]);
+void stream_data(RetainedSet * R, Cluster * clusters, CompressedSets * C, Point * data_buffer, long int size_of_data_buffer){
+    /*
+    * Algorithm:
+    *   1. read point from buffer
+    *   2. find if point is close enough to some centroid through primary compression criteria
+    *   3. if it is, add it to the cluster
+    *   4. if not, add it to retained set
+    *   5. apply secondary compression criteria to retained set
+    * 
+    * Parameters:
+    *   - R: retained set
+    *   - clusters: array of clusters
+    *   - C: compressed sets
+    *   - data_buffer: buffer to read data from
+    *   - size_of_data_buffer: size of data buffer
+    *
+    * Returns:
+    *   - void
+    */
+
+    if(DEBUG) printf("  Streaming data.\n");
+
+    Point p;        // current point being read
+    int offset = 0; // counter of the # of points read
+
+    if(DEBUG) printf("  Reading single points from buffer.\n");
+    while (read_point(data_buffer, &p, size_of_data_buffer, &offset)){
+        // apply primary compression criteria
+        if(DEBUG) printf("  Checking primary compression criteria.\n");
+
+        if (!primary_compression_criteria(clusters, p)){
+            if(DEBUG) printf("  Primary compression criteria not applicable, adding to Retained Set.\n");
+            // if not, add point to retained set
+            add_point_to_retained_set(R, p);
         }
-        printf("\n");
-
-        printf("Cluster %d size: %d\n", i, clusters[i].size);
-
-        printf("Cluster %d sum: ", i);
-
-        for (j = 0; j < M; j++){
-            printf("%d ", clusters[i].sum[j]);
-        }
-
-        printf("\n");
-
-        printf("Cluster %d sum_squares: ", i);
-
-        for (j = 0; j < M; j++){
-            printf("%d ", clusters[i].sum_squares[j]);
-        }
-
-        printf("\n");
     }
-}
 
-void print_compressedsets(CompressedSets C){
-    printf("Compressed Sets:\n");
-    int i = 0;
-    for(; i < C.number_of_sets; i++){
-        printf("Set %d size: %d\n", i, C.sets[i].number_of_points);
-
-        printf("Set %d sum: ", i);
-        int j = 0;
-        for (j = 0; j < M; j++){
-            printf("%d ", C.sets[i].sum[j]);
-        }
-        printf("\n");
-
-        printf("Set %d sum_squares: ", i);
-        j = 0;
-        for (j = 0; j < M; j++){
-            printf("%d ", C.sets[i].sum_square[j]);
-        }
-        printf("\n");
-    }
-}
-
-void print_retainedset(RetainedSet R){
-    printf("Retained Set:\n");
-    int i = 0;
-    for (; i < R.number_of_points; i++){
-        printf("Point %d: ", i);
-        int j = 0;
-        for (j = 0; j < M; j++){
-            printf("%lf ", R.points[i].coords[j]);
-        }
-        printf("\n");
-    }
+    if(DEBUG) printf("  Checking secondary compression criteria.\n");
+    // apply secondary compression criteria over retained set and compressed sets
+    secondary_compression_criteria(R, clusters, C);
 }
 
 void update_centroids(Cluster ** clusters, int number_of_clusters){
@@ -469,77 +455,160 @@ void update_centroids(Cluster ** clusters, int number_of_clusters){
     }
 }
 
+data_streamer data_streamer_Init(char * file_name, char * mode){
+    /*
+    * Initialize data streamer
+    *
+    * Algorithm:
+    *   1. open file
+    *   2. return file pointer
+    *
+    * Parameters:
+    *   - file_name: name of file to open
+    *   - mode: mode to open file in
+    *
+    * Returns:
+    *   - file pointer
+    */
+    FILE * file = fopen(file_name, mode);
+    if (file == NULL){
+        printf("Error: could not open file\n");
+        exit(1);
+    }
+
+    //get size of file ---> not needed?
+    // fseek(file, 0, SEEK_END);
+    // *size_of_file = ftell(file);
+    // fseek(file, 0, SEEK_SET);
+
+
+    return file;
+}
+
+bool load_data_buffer(data_streamer stream_cursor, Point * data_buffer, int max_size_of_buffer, long * size_of_data_buffer){
+    if (stream_cursor == NULL){
+        printf("Error: invalid stream cursor\n");
+        exit(1);
+    }
+
+    // if ((void*)data_buffer == NULL){
+    //     data_buffer = (Point *)malloc(max_size_of_buffer * sizeof(Point));
+    //     if ((void*)data_buffer == NULL){
+    //         printf("Error: could not allocate memory\n");
+    //         return false;
+    //     }
+    // }
+    
+    // fills data_buffer with MAX_SIZE_OF_BUFFER points or until EOF is reached
+    int i, j, counter = 0, return_val;
+    float x;
+    
+    if(DEBUG) printf("  Reading points.\n");
+    for (i = 0; i < MAX_SIZE_OF_BUFFER; i++){
+        Point p;
+        for (j = 0; j < M; j++){
+            return_val = fscanf(stream_cursor, "%f", &x);
+
+            if (return_val == EOF && i==0 && j==0) {
+                if(DEBUG) printf("  Buffer is empty, end algorithm.\n");
+                // first iteration of the loops, buffer is empty, end algorithm
+                return true;
+            }
+            else if (return_val == EOF) {
+                if(DEBUG) printf("  Buffer is not empty, end algorithm at the next iteration.\n");
+                // buffer is not empty - do another iteration, end at the next one.
+                return false;
+            }
+
+            p.coords[j] = (double) x;
+            data_buffer[i] = p;
+        }
+        counter++;
+    }
+
+    *size_of_data_buffer = counter;
+    if(DEBUG) printf("  Data buffer size is %d.\n", counter);
+    // *size_of_data_buffer = fread(*data_buffer, 1, max_size_of_buffer, stream_cursor);
+    // if (*size_of_data_buffer == 0){
+    //     return true;
+    // }
+
+    //TODO: check if the size of data respect the point format: n floats separated by space
+    // ---> now data should be read regardless of format
+
+    return false;
+}
+
 int main(int argc, char ** argv){
     if (argc != 2){
         printf("Usage: %s <input_file>\n", argv[0]);
         return 1;
     }
 
-    FILE * input_file = fopen(argv[1], "r");
+    if(DEBUG) printf("Starting BFR.\n");
 
-    if (input_file == NULL){
-        printf("Error opening file %s\n", argv[1]);
-        return 1;
-    }
+    data_streamer stream_cursor = data_streamer_Init(argv[1], "r");
 
-    Cluster * clusters = init_cluster(); // allocate the clusters array dynamically
-
-    take_k_centroids(clusters, input_file);
-
-    printf("Centroids:\n");
-    int i = 0;
-    for (i = 0; i < K; i++){
-        printf("Centroid %d: ", i);
-        int j = 0;
-        for (j = 0; j < M; j++){
-            printf("%lf ", clusters[i].centroid.coords[j]);
-        }
-        printf("\n");
-    }
+    Cluster * clusters = init_cluster(K); // allocate the clusters array dynamically
 
     RetainedSet R = init_retained_set();
 
     CompressedSets C = init_compressed_sets();
-    //start reading points from input file
-    stream_data(&R, clusters, &C, input_file);
 
-    print_clusters(clusters);
-    print_compressedsets(C);
-    print_retainedset(R);
-     //update centroids
-    update_centroids(&clusters, K);
+    Point data_buffer[MAX_SIZE_OF_BUFFER];
 
-    print_clusters(clusters);
+    if(DEBUG) printf("Allocation phase complete. Starting iterations.\n");
 
-    // //merge compressed sets to each other and cluster
-    // merge_compressed_sets(&C, &clusters);
+    //start reading block points from input file
+    bool stop_criteria = false, first_round = true;
+    do{ 
+        long size_of_data_buffer = 0;
+        if(DEBUG) printf("Loading buffer.\n");
+        stop_criteria = load_data_buffer(stream_cursor, data_buffer, MAX_SIZE_OF_BUFFER, &size_of_data_buffer);
 
-    // //merge retained set to clusters
-    // merge_retained_set(&R, &clusters);
+        if(DEBUG) printf("Buffer loaded, stop criteria is %d\n", stop_criteria);
+        if(stop_criteria == false){
 
-    // //update centroids
-    // update_centroids(&clusters);
+            if(first_round) take_k_centroids(clusters, data_buffer, size_of_data_buffer);
 
-    // free memory
-    // for (i = 0; i < K; i++){
-    //     free(clusters[i].centroid.coords);
-    //     free(clusters[i].sum.coords);
-    //     free(clusters[i].sum_squares.coords);
-    // }
+            // printf("data buffer: %s\n", data_buffer);
+            //stream data
+            //TODO: proposition to change the name of this function, in order to make it more clear
+            if(DEBUG) printf("Streaming data.\n");
+            stream_data(&R, clusters, &C, data_buffer, size_of_data_buffer);
+
+            if(DEBUG) printf("Updating centroids.\n");
+            //update centroids
+            update_centroids(&clusters, K);
+
+            if(DEBUG) printf("Printing.\n");
+            //print clusters
+            print_clusters(clusters);
+
+            //print compressed sets
+            print_compressedsets(C);
+
+            //print retained set
+            print_retainedset(R);
+        }
+
+        first_round = false;
+        // if (data_buffer != NULL){
+        //     free(data_buffer);
+        // }
+    }while(stop_criteria == false);
+
+    // decide what to do with remaining compressed sets and retained set:
+    // for now, we will treat them as outliers.
+    
+    if(DEBUG) printf("Freeing data.\n");
     free(clusters);
 
-    // for (i = 0; i < R->number_of_points; i++){
-    //     free(R->points[i].coords);
-    // }
+    
     free(R.points);
-    // free(R);
 
-    // for(i = 0; i < C->number_of_sets; i++){
-    //     free(C->sets[i].points);
-    // }
-    // free(C->sets);
-    // free(C);
     free(C.sets);
-    fclose(input_file);
+    fclose(stream_cursor);
+    if(DEBUG) printf("Execution complete!.\n");
     return 0;
 }

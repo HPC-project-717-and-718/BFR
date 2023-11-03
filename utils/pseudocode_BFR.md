@@ -9,7 +9,7 @@ start streaming the dataset D (size |D|), with each iteration take a block B of 
 
 while (dataset not read completely){
     for all points p in B{
-        if (p is closer than threshold to some ci){
+        if (p is closer than threshold to some ci or second primary compression criteria is found){ 
             update the discarder set Di with p
         }else {
             add p to the retained set R (R = R U {p})
