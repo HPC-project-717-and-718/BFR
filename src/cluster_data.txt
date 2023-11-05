@@ -1,0 +1,40 @@
+Cluster 0: 1.819817 4.911622 
+Cluster 0 size: 29
+Cluster 0 sum: 52.774689 142.437042 
+Cluster 0 sum_squares: 100.657674 710.439801 
+Cluster 1: 5.542387 3.924798 
+Cluster 1 size: 271
+Cluster 1 sum: 1501.986994 1063.620213 
+Cluster 1 sum_squares: 8407.022010 4847.265536 
+Cluster 2: -2.261904 5.777166 
+Cluster 2 size: 24
+Cluster 2 sum: -54.285687 138.651989 
+Cluster 2 sum_squares: 123.170794 802.937424 
+Cluster 3: 0.892698 3.330459 
+Cluster 3 size: 1115
+Cluster 3 sum: 995.358365 3713.461721 
+Cluster 3 sum_squares: 2727.847916 14021.249573 
+Cluster 4: 4.791705 5.130394 
+Cluster 4 size: 11
+Cluster 4 sum: 52.708756 56.434336 
+Cluster 4 sum_squares: 252.889367 289.806863 
+Cluster 5: 4.454965 4.204427 
+Cluster 5 size: 200
+Cluster 5 sum: 890.992987 840.885440 
+Cluster 5 sum_squares: 3992.587357 3687.633774 
+Cluster 6: -3.290698 3.021338 
+Cluster 6 size: 95
+Cluster 6 sum: -312.616325 287.027070 
+Cluster 6 sum_squares: 1174.143824 873.358735 
+Cluster 7: -1.444650 3.084504 
+Cluster 7 size: 16
+Cluster 7 sum: -23.114403 49.352070 
+Cluster 7 sum_squares: 33.983680 152.698475 
+Cluster 8: -2.354023 2.275822 
+Cluster 8 size: 2157
+Cluster 8 sum: -5077.627448 4908.949126 
+Cluster 8 sum_squares: 15736.149586 21498.568681 
+Cluster 9: -0.500425 4.904783 
+Cluster 9 size: 9
+Cluster 9 sum: -4.503824 44.143047 
+Cluster 9 sum_squares: 2.259411 216.960852 
