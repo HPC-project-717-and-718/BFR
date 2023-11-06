@@ -169,8 +169,11 @@ Cluster * cluster_retained_set(RetainedSet * R, int k){
     if(DEBUG) printf("          Initializing standard kmeans data.\n");
     Cluster * miniclusters = init_cluster(k);
 
+    // TODO: discuss a correct limit for not running standard kmeans
+    // as of now, do not run kmeans if the number of points is < k
+    // we may want to run kmeans when we have more than k*constant number of points
     if((*R).number_of_points < k){
-        if(DEBUG) printf("          Retained set has less points than clusters. Returning empty miniclusters.\n");
+        if(DEBUG) printf("          Retained set has less points (%d) than clusters(%d). Returning empty miniclusters.\n", (*R).number_of_points, k);
         return miniclusters;
     }
 
@@ -192,6 +195,7 @@ Cluster * cluster_retained_set(RetainedSet * R, int k){
     RetainedSet new_R = init_retained_set();
     for (i = 0; i < config.num_objs; i++){
         Point *pt = (Point *)(config.objs[i]);
+        // TODO: use a different measure to determine a minicluster's tightness
         if (miniclusters[config.clusters[i]].size == 1){
             add_point_to_retained_set(&new_R, *pt);
         }
