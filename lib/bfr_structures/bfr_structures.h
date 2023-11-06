@@ -18,6 +18,7 @@ typedef struct {
     int index;
 } Cluster;
 
+// TODO: consider making the points field a linked list
 typedef struct {
     Point * points;
     int number_of_points;
@@ -46,5 +47,8 @@ void print_retainedset(RetainedSet R);
 
 
 void add_point_to_retained_set(RetainedSet * R, Point p);
+void update_cluster(Cluster * cluster, Point p);
+void update_centroids(Cluster ** clusters, int number_of_clusters);
+void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclusters, int number_of_miniclusters);
 
 #endif

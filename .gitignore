@@ -1,6 +1,6 @@
 #ignore output results, for now
-/output/*
-!/output/gitkeep
+/output/output.txt
+!/output/.gitkeep
 
 #ignore binaries
 /src/bfr_serial

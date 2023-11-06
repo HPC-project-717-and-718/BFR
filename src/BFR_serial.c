@@ -35,30 +35,6 @@ void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_
     }
 }
 
-void update_cluster(Cluster * cluster, Point p){
-    /*
-    * Update cluster
-    *
-    * Algorithm:
-    *   1. update cluster size
-    *   2. update cluster sum
-    *   3. update cluster sum_squares
-    *
-    * Parameters:
-    *   - cluster: cluster to update
-    *   - p: point to add to cluster
-    *
-    * Returns:
-    *   - void
-    */
-    cluster->size += 1;
-    int i = 0;
-    for (i = 0; i < M; i++){
-        cluster->sum[i] += p.coords[i];
-        cluster->sum_squares[i] += pow(p.coords[i], 2);
-    }
-}
-
 bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, int * offset){
     /*
     * Read a point from data buffer
@@ -323,11 +299,14 @@ void secondary_compression_criteria(RetainedSet * R, Cluster * clusters, Compres
     */
 
     // aggregate retained set into miniclusters
-    // TODO: decide the number of clusters. for now, set as K but by specs should be k2>K
     if(DEBUG) printf("      Creating miniclusters from Retained Set.\n");
-    Cluster *miniclusters = cluster_retained_set(R, K);
+    // TODO: decide the number of clusters. for now, set as K but by specs should be k2>K
+    int number_of_miniclusters = K;
+    Cluster *miniclusters = cluster_retained_set(R, number_of_miniclusters);
 
-    // TODO: add miniclusters to clusters and then fuse them together when possible
+    if(DEBUG) printf("      Merging Compressed Sets and miniclusters and aggregating them, if possible.\n");
+    merge_compressedsets_and_miniclusters(C, miniclusters, number_of_miniclusters);
+
 
     if(DEBUG) printf("      Freeing miniclusters.\n");
     free(miniclusters);
@@ -422,37 +401,6 @@ void stream_data(RetainedSet * R, Cluster * clusters, CompressedSets * C, Point 
     if(DEBUG) printf("  Checking secondary compression criteria.\n");
     // apply secondary compression criteria over retained set and compressed sets
     secondary_compression_criteria(R, clusters, C);
-}
-
-void update_centroids(Cluster ** clusters, int number_of_clusters){
-    /*
-    * Update centroids of clusters
-    *
-    * Algorithm:
-    *   1. iter over clusters
-    *   2. if cluster size is greater than 1, update centroid
-    *
-    * Parameters:
-    *   - clusters: array of clusters
-    *   - number_of_clusters: number of clusters
-    *
-    * Returns:
-    *   - void
-    */
-
-    int i;
-    for (i = 0; i < number_of_clusters; i++){
-        int size = (*clusters)[i].size;
-        if (size >= 1){
-            Point new_centroid;
-            int j = 0;
-            for (j = 0; j < M; j++){
-                new_centroid.coords[j] = (double) (*clusters)[i].sum[j] / (double) (*clusters)[i].size; 
-            }
-            new_centroid.cluster = (*clusters)[i].centroid.cluster;
-            (*clusters)[i].centroid = new_centroid;
-        }
-    }
 }
 
 data_streamer data_streamer_Init(char * file_name, char * mode){

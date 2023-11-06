@@ -87,7 +87,7 @@ static void centroid(const Pointer * objs, const int * clusters, size_t num_objs
     * Note: this might be inefficient, as in BFR we could save a cluster by its statistics directly
     *       but for now we'll stick to normal kmeans' requirements
     */
-    if(DEBUG) printf("              Updating centroid for cluster %d.\n", cluster);
+    // if(DEBUG) printf("              Updating centroid for cluster %d.\n", cluster);
 	int i, j;
 	int num_cluster = 0;
 	Point sum;
@@ -100,7 +100,7 @@ static void centroid(const Pointer * objs, const int * clusters, size_t num_objs
 
 	if (num_objs <= 0) return;
 
-    if(DEBUG) printf("              Reading all points being clustered.\n");
+    // if(DEBUG) printf("              Reading all points being clustered.\n");
 	for (i = 0; i < num_objs; i++){
 		/* Only process objects of interest */
 		if (clusters[i] != cluster) continue;
@@ -112,19 +112,19 @@ static void centroid(const Pointer * objs, const int * clusters, size_t num_objs
         }
 		num_cluster++;
 	}
-    if(DEBUG) printf("              Read all points, updating cluster coordinates.\n");
+    // if(DEBUG) printf("              Read all points, updating cluster coordinates.\n");
 	if (num_cluster){
         for (i = 0; i < M; i++){
             sum.coords[i] /= num_cluster;
         }
 		*center = sum;
 	}
-    if(DEBUG) printf("              Cluster coordinates updated.\n");
+    // if(DEBUG) printf("              Cluster coordinates updated.\n");
 	return;
 }
 
 
-kmeans_config init_kmeans_config(int k, RetainedSet * R, Point * init, Point * pts){
+kmeans_config init_kmeans_config(int k, RetainedSet * R){
     kmeans_config config;
 
     int i, number_of_points = (*R).number_of_points;
@@ -143,29 +143,23 @@ kmeans_config init_kmeans_config(int k, RetainedSet * R, Point * init, Point * p
 	config.centers = calloc(config.k, sizeof(Pointer));
 	config.clusters = calloc(config.num_objs, sizeof(int));
 
-    /* Copy arrays to avoid damaging the RetainedSet*/
-	pts = calloc(config.num_objs, sizeof(Point));
-	init = calloc(config.k, sizeof(Point));
-
-    if (pts == NULL || init == NULL) {
-        perror("Memory allocation failed");
-        exit(EXIT_FAILURE);
-    }
 
     if(DEBUG) printf("              Copying Retained set.\n");
     /* Add to kmeans' config the RetainedSet's points */
     for (i = 0; i < number_of_points; i++){
-        pts[i] = (*R).points[i];
-        config.objs[i] = &(pts[i]);
+
+        config.objs[i] = &((*R).points[i]);
     }
 	
     if(DEBUG) printf("              Selecting clusters.\n");
 	/* Populate the initial means vector with random start points */
 	for (i = 0; i < config.k; i++){
-		int r = lround(config.num_objs * (1.0 * rand() / RAND_MAX));
+		int r = lround(config.num_objs * (1.0 * rand() / RAND_MAX))-1;
+        if(DEBUG) printf("              r:%d\n", r);
+        if(DEBUG) printf("              R.points[r]:%lf %lf.\n", (*R).points[r].coords[0], (*R).points[r].coords[1]);
 		/* Pointers to the randomly picked point */
-        init[i] = (*R).points[r];
-		config.centers[i] = &(init[i]);
+        
+		config.centers[i] = &((*R).points[r]);
 	}
 
     return config;
@@ -173,34 +167,68 @@ kmeans_config init_kmeans_config(int k, RetainedSet * R, Point * init, Point * p
 
 Cluster * cluster_retained_set(RetainedSet * R, int k){
     if(DEBUG) printf("          Initializing standard kmeans data.\n");
-    Cluster * miniclusters = init_cluster(K);
+    Cluster * miniclusters = init_cluster(k);
 
-    Point* init;
-    Point* pts;
-    kmeans_config config = init_kmeans_config(K, R, init, pts);
+    // TODO: discuss a correct limit for not running standard kmeans
+    // as of now, do not run kmeans if the number of points is < k
+    // we may want to run kmeans when we have more than k*constant number of points
+    if((*R).number_of_points < k){
+        if(DEBUG) printf("          Retained set has less points (%d) than clusters(%d). Returning empty miniclusters.\n", (*R).number_of_points, k);
+        return miniclusters;
+    }
+
+    kmeans_config config = init_kmeans_config(k, R);
     if(DEBUG) printf("          Executing standard kmeans.\n");
 	kmeans_result result = kmeans(&config);
 
     if(DEBUG) printf("          Iteration count: %d\n", config.total_iterations);
     if(DEBUG) printf("          Transferring kmeans cluster data to miniclusters.\n");
     
-    // TODO: complete the function by filling miniclusters if a cluster found with kmeans has more than one point
-    // TODO: remove from Retained Set the points added to a minicluster, keep the ones not added to a minicluster
     int i;
     for (i = 0; i < config.num_objs; i++){
         Point *pt = (Point *)(config.objs[i]);
 
-        // printf("%g\t%g\t%d\n", pt->coords[0], pt->coords[1], config.clusters[i]);
+        update_cluster(&miniclusters[config.clusters[i]], *pt);
+    }
+
+    // create new correct retained set with only the points left alone in their clusters
+    RetainedSet new_R = init_retained_set();
+    for (i = 0; i < config.num_objs; i++){
+        Point *pt = (Point *)(config.objs[i]);
+        // TODO: use a different measure to determine a minicluster's tightness
+        if (miniclusters[config.clusters[i]].size == 1){
+            add_point_to_retained_set(&new_R, *pt);
+        }
+        else {
+            if(DEBUG) printf("Point not added to retained set: %g\t%g\t%d\n", pt->coords[0], pt->coords[1], config.clusters[i]);
+        }
+    }
+
+    if(DEBUG){
+        printf("          Old retained set:\n");
+        print_retainedset(*R);
+    }
+
+    // TODO: discuss whether this is correct or not
+    // free old retained set and replace with new one
+    free((*R).points);
+    (*R).points = new_R.points;
+    (*R).number_of_points = new_R.number_of_points;
+
+    if(DEBUG){
+        printf("          New retained set:\n");
+        print_retainedset(*R);
     }
 
     if(DEBUG) printf("          Freeing previously allocated data for standard kmeans.\n");
-    // free(init); // freeing this data causes a crash. TODO: review error, freeing here probably is not needed as objs[] and clusters[] copy the arrays' data
-    // free(pts);  // freeing this data causes a crash. TODO: review error, freeing here probably is not needed as objs[] and clusters[] copy the arrays' data
 
-	free(config.objs);
-	free(config.clusters);
-	free(config.centers);
+	// free the kmeans' config data
+    free(config.objs);
+    free(config.centers);
+    free(config.clusters);
 
-
+    // update miniclusters' centroids
+    update_centroids(&miniclusters, k);
+    
     return miniclusters;
 }
