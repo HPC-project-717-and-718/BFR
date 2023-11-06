@@ -245,6 +245,7 @@ bool second_primary_compression_criteria(Cluster * clusters, Point p){
     */
 
     //take the two closest centroids
+    //TODO: the confidence interval is not correct
     double min_distance = distance((Pointer)&(clusters[0].centroid), (Pointer)&p);
     int index_of_min = 0;
     double second_min_distance = distance((Pointer)&(clusters[1].centroid), (Pointer)&p);
@@ -269,7 +270,9 @@ bool second_primary_compression_criteria(Cluster * clusters, Point p){
 
     if (distance((Pointer)&pertubated_centroid_1, (Pointer)&p) < distance((Pointer)&pertubated_centroid_2, (Pointer)&p)){
         //add point to cluster
+        if(DEBUG) printf(" Point respect the second primary compression criteria, adding to cluster.\n");
         update_cluster(&clusters[index_of_min], p);
+        if(DEBUG) printf(" Cluster %d updated.\n", );
         return true;
     }
 

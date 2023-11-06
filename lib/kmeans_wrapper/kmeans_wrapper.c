@@ -165,6 +165,52 @@ kmeans_config init_kmeans_config(int k, RetainedSet * R){
     return config;
 }
 
+bool tightness_evaluation(Cluster c, int * tightness_flag, int index){
+    /*
+    */
+    //if tighteness_flag[index] 0 is not computed, compute it
+    //if tighteness_flag[index] 1 is computed, and is false
+    //if tighteness_flag[index] 2 is computed, and is true
+    if(DEBUG) printf("              Evaluating tightness for minicluster %d.\n", index);
+    if (tightness_flag[index] == 0){
+        if (c.size < 2){
+            tightness_flag[index] = 1;
+            return false;
+        }
+        int * x_sub = c.sum;
+        x_sub = x_sub / c.size;
+        int j = 0;
+        double max_value = 0;
+        for (j = 0; j < M; j++){
+            double value = c.sum_squares[j] - (c.size * pow(x_sub[j], 2));
+            value = value / (c.size - 1);
+            value = sqrt(value);
+            if (value > max_value){
+                max_value = value;
+            }
+        }
+        if(DEBUG) printf("              Max value for tightness constraint: %lf.\n", max_value);
+        if (max_value < BETA){
+            tightness_flag[index] = 2;
+            return true;
+        }else{
+            tightness_flag[index] = 1;
+            return false;
+        }
+    }
+    else if (tightness_flag[index] == 1){
+        return false;
+    }
+    else if (tightness_flag[index] == 2){
+        return true;
+    }
+    else {
+        printf("Error: tightness_flag[%d] has an invalid value: %d\n", index, tightness_flag[index]);
+        exit(1);
+    } 
+
+}
+
 Cluster * cluster_retained_set(RetainedSet * R, int k){
     if(DEBUG) printf("          Initializing standard kmeans data.\n");
     Cluster * miniclusters = init_cluster(k);
@@ -193,10 +239,14 @@ Cluster * cluster_retained_set(RetainedSet * R, int k){
 
     // create new correct retained set with only the points left alone in their clusters
     RetainedSet new_R = init_retained_set();
+    int * tightness_flag;
+    tightness_flag = calloc(k, sizeof(bool));
     for (i = 0; i < config.num_objs; i++){
         Point *pt = (Point *)(config.objs[i]);
         // TODO: use a different measure to determine a minicluster's tightness
-        if (miniclusters[config.clusters[i]].size == 1){
+        int index = config.clusters[i];
+
+        if (thighness_evalutation(miniclusters[index], tightness_flag, index)){
             add_point_to_retained_set(&new_R, *pt);
         }
         else {
