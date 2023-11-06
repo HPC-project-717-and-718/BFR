@@ -211,3 +211,37 @@ void update_centroids(Cluster ** clusters, int number_of_clusters){
         }
     }
 }
+
+void add_miniclusters_to_compressedsets(CompressedSets * C, Cluster * miniclusters, int number_of_miniclusters){
+    int i;
+    for (i=0; i<number_of_miniclusters; i++){
+        if (miniclusters[i].size > 1){
+            // add minicluster to compressed sets
+            (*C).number_of_sets += 1;
+            (*C).sets = realloc(C->sets, C->number_of_sets * sizeof(CompressedSet));
+            if (C->sets == NULL){
+                printf("Error: could not allocate memory\n");
+                exit(1);
+            }
+            (*C).sets[C->number_of_sets - 1].number_of_points = miniclusters[i].size;
+            int j;
+            for (j=0; j<M; j++){
+                (*C).sets[C->number_of_sets - 1].sum[j] = miniclusters[i].sum[j];
+                (*C).sets[C->number_of_sets - 1].sum_square[j] = miniclusters[i].sum_squares[j];
+            }
+        }
+    }
+}
+
+void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclusters, int number_of_miniclusters){
+    add_miniclusters_to_compressedsets(C, miniclusters, number_of_miniclusters);
+
+    // TODO: merge compressed sets using hierarchical clustering
+    // priority queue pseudocode (naive implementation is also possible, I don't care tbh)
+    // priority queue of compressed sets
+    // while (priority queue is not empty){
+    //     pop two compressed sets
+    //     merge them if they fit criteria (to be discussed)
+    //     push merged compressed set to priority queue, if it fits criteria
+    // }
+}
