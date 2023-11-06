@@ -403,36 +403,6 @@ void stream_data(RetainedSet * R, Cluster * clusters, CompressedSets * C, Point 
     secondary_compression_criteria(R, clusters, C);
 }
 
-data_streamer data_streamer_Init(char * file_name, char * mode){
-    /*
-    * Initialize data streamer
-    *
-    * Algorithm:
-    *   1. open file
-    *   2. return file pointer
-    *
-    * Parameters:
-    *   - file_name: name of file to open
-    *   - mode: mode to open file in
-    *
-    * Returns:
-    *   - file pointer
-    */
-    FILE * file = fopen(file_name, mode);
-    if (file == NULL){
-        printf("Error: could not open file\n");
-        exit(1);
-    }
-
-    //get size of file ---> not needed?
-    // fseek(file, 0, SEEK_END);
-    // *size_of_file = ftell(file);
-    // fseek(file, 0, SEEK_SET);
-
-
-    return file;
-}
-
 bool load_data_buffer(data_streamer stream_cursor, Point * data_buffer, int max_size_of_buffer, long * size_of_data_buffer){
     if (stream_cursor == NULL){
         printf("Error: invalid stream cursor\n");

@@ -78,6 +78,35 @@ Cluster * init_cluster(int k){
     return clusters;
 }
 
+data_streamer data_streamer_Init(char * file_name, char * mode){
+    /*
+    * Initialize data streamer
+    *
+    * Algorithm:
+    *   1. open file
+    *   2. return file pointer
+    *
+    * Parameters:
+    *   - file_name: name of file to open
+    *   - mode: mode to open file in
+    *
+    * Returns:
+    *   - file pointer
+    */
+    FILE * file = fopen(file_name, mode);
+    if (file == NULL){
+        printf("Error: could not open file\n");
+        exit(1);
+    }
+
+    //get size of file ---> not needed?
+    // fseek(file, 0, SEEK_END);
+    // *size_of_file = ftell(file);
+    // fseek(file, 0, SEEK_SET);
+
+
+    return file;
+}
 
 void print_clusters(Cluster * clusters){
     printf("Clusters:\n");
