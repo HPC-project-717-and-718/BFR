@@ -272,7 +272,7 @@ bool second_primary_compression_criteria(Cluster * clusters, Point p){
         //add point to cluster
         if(DEBUG) printf(" Point respect the second primary compression criteria, adding to cluster.\n");
         update_cluster(&clusters[index_of_min], p);
-        if(DEBUG) printf(" Cluster %d updated.\n", );
+        if(DEBUG) printf(" Cluster %d updated.\n", index_of_min);
         return true;
     }
 

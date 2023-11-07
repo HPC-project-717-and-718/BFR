@@ -55,6 +55,7 @@ double distance(const Pointer a, const Pointer b){
     */
     Point* p1 = (Point*)a;
     Point* p2 = (Point*)b;
+    //TODO: insert control if the cast is successful or not
 
     double sum = 0;
     int i = 0;
@@ -177,8 +178,12 @@ bool tightness_evaluation(Cluster c, int * tightness_flag, int index){
             tightness_flag[index] = 1;
             return false;
         }
-        int * x_sub = c.sum;
-        x_sub = x_sub / c.size;
+        int * x_sub = malloc(M * sizeof(int));
+        int i = 0;
+        for (i = 0; i < M; i++){
+            x_sub[i] = c.sum[i];
+            x_sub[i] = x_sub[i] / c.size;
+        }
         int j = 0;
         double max_value = 0;
         for (j = 0; j < M; j++){
@@ -246,7 +251,7 @@ Cluster * cluster_retained_set(RetainedSet * R, int k){
         // TODO: use a different measure to determine a minicluster's tightness
         int index = config.clusters[i];
 
-        if (thighness_evalutation(miniclusters[index], tightness_flag, index)){
+        if (tightness_evaluation(miniclusters[index], tightness_flag, index)){
             add_point_to_retained_set(&new_R, *pt);
         }
         else {

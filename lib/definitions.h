@@ -17,5 +17,6 @@
 #define NORMAL_KMEANS_MAX_ITERATIONS 200 // max number of normal kmeans iterations
 #define DEBUG 0                          // turn on/off debug prints
 #define data_streamer FILE *             // data streamer type
+#define BETA 0.5                         // beta parameter for BFR algorithm
 
 #endif
