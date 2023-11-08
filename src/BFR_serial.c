@@ -305,14 +305,14 @@ void secondary_compression_criteria(RetainedSet * R, Cluster * clusters, Compres
     if(DEBUG) printf("      Creating miniclusters from Retained Set.\n");
     // TODO: decide the number of clusters. for now, set as K but by specs should be k2>K
     int number_of_miniclusters = K;
-    Cluster *miniclusters = cluster_retained_set(R, number_of_miniclusters);
+    Cluster *miniclusters = cluster_retained_set(R, &number_of_miniclusters);
 
     if(DEBUG) printf("      Merging Compressed Sets and miniclusters and aggregating them, if possible.\n");
     merge_compressedsets_and_miniclusters(C, miniclusters, number_of_miniclusters);
 
 
     if(DEBUG) printf("      Freeing miniclusters.\n");
-    free(miniclusters);
+    //free(miniclusters);
 
     // if (C->number_of_sets > 0){
     //     int size_of_C = C->number_of_sets;
@@ -511,6 +511,8 @@ int main(int argc, char ** argv){
 
             //print retained set
             print_retainedset(R);
+
+            printf("\n\n");
         }
 
         first_round = false;
@@ -521,6 +523,16 @@ int main(int argc, char ** argv){
 
     // decide what to do with remaining compressed sets and retained set:
     // for now, we will treat them as outliers.
+    if(DEBUG){
+        //print clusters
+        print_clusters(clusters);
+
+        //print compressed sets
+        print_compressedsets(C);
+
+        //print retained set
+        print_retainedset(R);
+    }
     
     if(DEBUG) printf("Freeing data.\n");
     free(clusters);

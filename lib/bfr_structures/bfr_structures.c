@@ -283,6 +283,8 @@ void add_miniclusters_to_compressedsets(CompressedSets * C, Cluster * minicluste
             }
         }
     }
+
+    free(miniclusters);
 }
 
 CompressedSet merge_compressedsets(CompressedSet C1, CompressedSet C2){
@@ -296,33 +298,20 @@ CompressedSet merge_compressedsets(CompressedSet C1, CompressedSet C2){
     return C;
 }
 
-void remove_compressedset(CompressedSets * C, int i, int j){
-    int k;
-    for (k=j; k<C->number_of_sets-1; k++){
-        C->sets[k] = C->sets[k+1];
-    }
-    C->number_of_sets -= 1;
-    C->sets = realloc(C->sets, C->number_of_sets * sizeof(CompressedSet));
-    if (C->sets == NULL){
-        printf("Error: could not allocate memory\n");
-        exit(1);
-    }
-
-    int l;
-    for (l=i; l<C->number_of_sets-1; l++){
-        C->sets[l] = C->sets[l+1];
-    }
-    C->number_of_sets -= 1;
-    C->sets = realloc(C->sets, C->number_of_sets * sizeof(CompressedSet));
+void remove_compressedset(CompressedSets * C, int i, int j, bool * cset_validity){
+    cset_validity[i] = false;
+    cset_validity[j] = false;
     if (C->sets == NULL){
         printf("Error: could not allocate memory\n");
         exit(1);
     }
 }
 
-void add_compressedset(CompressedSets * C, CompressedSet C1){
+void add_compressedset(CompressedSets * C, CompressedSet C1, bool * cset_validity){
     (*C).number_of_sets += 1;
     (*C).sets = realloc(C->sets, C->number_of_sets * sizeof(CompressedSet));
+    cset_validity = realloc(cset_validity, C->number_of_sets * sizeof(bool));
+    cset_validity[C->number_of_sets - 1] = true;
     if (C->sets == NULL){
         printf("Error: could not allocate memory\n");
         exit(1);
@@ -333,6 +322,8 @@ void add_compressedset(CompressedSets * C, CompressedSet C1){
 bool pop_from_pqueue(PriorityQueue *pq){
     /*
     * Pop from priority queue
+    *
+    * Algorithm
     */
 
     // If the priority queue is empty, return NULL.
@@ -376,10 +367,29 @@ bool pop_from_pqueue(PriorityQueue *pq){
 
     if (DEBUG) printf("Popped from priority queue: %lf\n", hd->distance);
 
+    free(hd);
+
     return true;
 }
 
 bool remove_from_pqueue(PriorityQueue *pq, int i1, int i2){
+    /*
+    * Remove from priority queue
+    *
+    * Algorithm:
+    *   1. create new priority queue
+    *   2. add all elements from priority queue except those with index i1 or i2
+    *   3. free old priority queue
+    *   4. set old priority queue to new priority queue
+    *
+    * Parameters:
+    *   - pq: priority queue
+    *   - i1: index of compressed set 1
+    *   - i2: index of compressed set 2
+    *
+    * Returns:
+    *   - void
+    */
     PriorityQueue * pq2 = createPriorityQueue(pq->capacity);
     pq2->size = 0;
     int j = 0;
@@ -391,8 +401,7 @@ bool remove_from_pqueue(PriorityQueue *pq, int i1, int i2){
     free(pq->data);
     free(pq);
     
-    pq->data = pq2->data;
-    pq->size = pq2->size;
+    pq = pq2;
 }
 
 bool add_to_pqueue(PriorityQueue *pq, hierc_element hd){
@@ -535,17 +544,106 @@ bool is_empty_pqueue(PriorityQueue * pq){
     }
 }
 
+void restore_csets(CompressedSets * C, bool * cset_validity){
+    /*
+    * Restore compressed sets
+    *
+    * Algorithm:
+    *   1. create new compressed sets
+    *   2. add all valid compressed sets to new compressed sets
+    *   3. free old compressed sets
+    *   4. set old compressed sets to new compressed sets
+    *
+    * Parameters:
+    *   - C: compressed sets
+    *   - cset_validity: array of bools indicating if compressed set is valid
+    *
+    * Returns:
+    *   - void
+    */
+    CompressedSets * C2 = malloc(sizeof(CompressedSets));
+    C2->number_of_sets = 0;
+    C2->sets = NULL;
+    int i;
+    for (i=0; i<C->number_of_sets; i++){
+        if (!cset_validity[i]){
+            add_compressedset(C2, C->sets[i], cset_validity);
+        }
+    }
+
+    C->number_of_sets = C2->number_of_sets;
+    C->sets = C2->sets;
+
+    free(C2->sets);
+    free(C2);
+}
+
+bool tightness_evaluation_cset(CompressedSet c){
+    /*
+    * Tightness evaluation for compressed set
+    *
+    * Algorithm:
+    *   1. calculate max value
+    *   2. if max value is less than BETA, return true
+    *   3. else, return false
+    *
+    * Parameters:
+    *   - c: compressed set
+    *
+    * Returns:
+    *   - bool indicating if compressed set is tight
+    */
+    int * x_sub = malloc(M * sizeof(int));
+    int i = 0;
+    for (i = 0; i < M; i++){
+        x_sub[i] = c.sum[i];
+        x_sub[i] = x_sub[i] / c.number_of_points;
+    }
+    int j = 0;
+    double max_value = 0;
+    for (j = 0; j < M; j++){
+        double value = c.sum_square[j] - (c.number_of_points * pow(x_sub[j], 2));
+        value = value / c.number_of_points ;
+        value = sqrt(value);
+        if (value > max_value){
+            max_value = value;
+        }
+    }
+    if (DEBUG) printf("              Max value for tightness constraint: %lf.\n", max_value);
+    if (max_value < BETA){
+        return true;
+    }else{
+        return false;
+    }
+}
+
 void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclusters, int number_of_miniclusters){
     /*
-    * A
+    * Algorithm:
+    *   1. add miniclusters to compressed sets
+    *   2. calculate distances between compressed sets
+    *   3. priority queue implementation of hierchical clustering over miniclusters and compressed sets
+    *
+    * Parameters:
+    *   - C: compressed sets
+    *   - miniclusters: miniclusters
+    *   - number_of_miniclusters: number of miniclusters
+    *
+    * Returns:
+    *   - void
     */
     add_miniclusters_to_compressedsets(C, miniclusters, number_of_miniclusters);
+    if(DEBUG) printf("\n\nNumber of compressed sets after adding miniclusters: %d\n\n", C->number_of_sets);
 
     bool stop_merging = false;
+    bool * cset_validity = malloc(C->number_of_sets * sizeof(bool));
+    int i;
+    for (i=0; i<C->number_of_sets; i++){
+        cset_validity[i] = true;
+    }
 
     // calculate distances between compressed sets
     PriorityQueue * pq = createPriorityQueue(C->number_of_sets * (C->number_of_sets - 1) / 2);
-    int i;
     for (i=0; i<C->number_of_sets; i++){
         int j;
         for (j=i+1; j<C->number_of_sets; j++){
@@ -566,15 +664,36 @@ void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclu
         }else{
             CompressedSet merged = merge_compressedsets(C->sets[hd->index_of_cset_1], C->sets[hd->index_of_cset_2]);
             pop_from_pqueue(pq);
-            if(tightness_evaluation(merged)){
+            if(tightness_evaluation_cset(merged)){
                 //TODO: merge and remove from priority queue all element with same index and calculate new distance between merged and all other compressed sets
                 // remove_from_pqueue(pq, hd->index_of_cset_1, hd->index_of_cset_2);
+                add_compressedset(C, merged, cset_validity);
+
+                remove_compressedset(C, hd->index_of_cset_1, hd->index_of_cset_2, cset_validity);
+
+                remove_from_pqueue(pq, hd->index_of_cset_1, hd->index_of_cset_2);
+
+                //calculate distances between merged and all other compressed sets
+                int i;
+                for (i=0; i<(C->number_of_sets-1); i++){
+                    if (cset_validity[i]){
+                        hierc_element hd;
+                        hd.distance = distance_compressedsets(C->sets[i], merged);
+                        hd.index_of_cset_1 = i;
+                        hd.index_of_cset_2 = C->number_of_sets - 1;
+                        add_to_pqueue(pq, hd);
+                    }
+                }
             }
         }
         if (is_empty_pqueue(pq)){
             stop_merging = true;
         }
     }
+
+    restore_csets(C, cset_validity);
+
+    free(cset_validity);
 
     // TODO: merge compressed sets using hierarchical clustering
     // priority queue pseudocode (naive implementation is also possible, I don't care tbh)

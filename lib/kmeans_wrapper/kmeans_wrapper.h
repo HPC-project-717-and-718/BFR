@@ -10,7 +10,7 @@ double mahalanobis_distance(Cluster c, Point p);
 double distance(const Pointer a, const Pointer b);
 
 
-Cluster * cluster_retained_set(RetainedSet * R, int k);
+Cluster * cluster_retained_set(RetainedSet * R, int *k);
 
 
 #endif

@@ -166,7 +166,7 @@ kmeans_config init_kmeans_config(int k, RetainedSet * R){
     return config;
 }
 
-bool tightness_evaluation(Cluster c, int * tightness_flag, int index){
+bool tightness_evaluation_cluster(Cluster c, int * tightness_flag, int index){
     /*
     */
     //if tighteness_flag[index] 0 is not computed, compute it
@@ -188,7 +188,7 @@ bool tightness_evaluation(Cluster c, int * tightness_flag, int index){
         double max_value = 0;
         for (j = 0; j < M; j++){
             double value = c.sum_squares[j] - (c.size * pow(x_sub[j], 2));
-            value = value / (c.size - 1);
+            value = value / (c.size);
             value = sqrt(value);
             if (value > max_value){
                 max_value = value;
@@ -216,19 +216,44 @@ bool tightness_evaluation(Cluster c, int * tightness_flag, int index){
 
 }
 
-Cluster * cluster_retained_set(RetainedSet * R, int k){
+int update_miniclusters(Cluster ** miniclusters, int * tightness_flag, int k){
+    /*
+    */
+    int i = 0;
+    int j = 0;
+    int new_k = 0;
+    for (i = 0; i < k; i++){
+        if (tightness_flag[i] == 2){
+            new_k++;
+        }
+    }
+    Cluster * new_miniclusters = init_cluster(new_k);
+    j = 0;
+    for (i = 0; i < k; i++){
+        if (tightness_flag[i] == 2){
+            new_miniclusters[j] = (*miniclusters)[i];
+            j++;
+        }
+    }
+    free(*miniclusters);
+    *miniclusters = new_miniclusters;
+
+    return new_k;
+}
+
+Cluster * cluster_retained_set(RetainedSet * R, int * k){
     if(DEBUG) printf("          Initializing standard kmeans data.\n");
-    Cluster * miniclusters = init_cluster(k);
+    Cluster * miniclusters = init_cluster((*k));
 
     // TODO: discuss a correct limit for not running standard kmeans
     // as of now, do not run kmeans if the number of points is < k
     // we may want to run kmeans when we have more than k*constant number of points
-    if((*R).number_of_points < k){
-        if(DEBUG) printf("          Retained set has less points (%d) than clusters(%d). Returning empty miniclusters.\n", (*R).number_of_points, k);
+    if((*R).number_of_points < (*k)){
+        if(DEBUG) printf("          Retained set has less points (%d) than clusters(%d). Returning empty miniclusters.\n", (*R).number_of_points, (*k));
         return miniclusters;
     }
 
-    kmeans_config config = init_kmeans_config(k, R);
+    kmeans_config config = init_kmeans_config((*k), R);
     if(DEBUG) printf("          Executing standard kmeans.\n");
 	kmeans_result result = kmeans(&config);
 
@@ -245,13 +270,13 @@ Cluster * cluster_retained_set(RetainedSet * R, int k){
     // create new correct retained set with only the points left alone in their clusters
     RetainedSet new_R = init_retained_set();
     int * tightness_flag;
-    tightness_flag = calloc(k, sizeof(bool));
+    tightness_flag = calloc((*k), sizeof(int));
     for (i = 0; i < config.num_objs; i++){
         Point *pt = (Point *)(config.objs[i]);
         // TODO: use a different measure to determine a minicluster's tightness
         int index = config.clusters[i];
 
-        if (tightness_evaluation(miniclusters[index], tightness_flag, index)){
+        if (!tightness_evaluation_cluster(miniclusters[index], tightness_flag, index)){
             add_point_to_retained_set(&new_R, *pt);
         }
         else {
@@ -277,13 +302,19 @@ Cluster * cluster_retained_set(RetainedSet * R, int k){
 
     if(DEBUG) printf("          Freeing previously allocated data for standard kmeans.\n");
 
+    //update miniclusters, retain only with tightness_flag = 2
+    (*k) = update_miniclusters(&miniclusters, tightness_flag, (*k));
+
 	// free the kmeans' config data
     free(config.objs);
     free(config.centers);
     free(config.clusters);
 
+    // free tightness flag
+    free(tightness_flag);
+
     // update miniclusters' centroids
-    update_centroids(&miniclusters, k);
+    update_centroids(&miniclusters, (*k));
     
     return miniclusters;
 }

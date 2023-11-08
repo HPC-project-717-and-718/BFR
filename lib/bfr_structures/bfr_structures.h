@@ -63,10 +63,10 @@ void update_cluster(Cluster * cluster, Point p);
 void update_centroids(Cluster ** clusters, int number_of_clusters);
 void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclusters, int number_of_miniclusters);
 data_streamer data_streamer_Init(char * file_name, char * mode);
-void add_compressedset(CompressedSets * C, CompressedSet C1);
-void remove_compressedset(CompressedSets * C, int i, int j);
+void add_compressedset(CompressedSets * C, CompressedSet C1, bool * cset_validity);
+void remove_compressedset(CompressedSets * C, int i, int j, bool * cset_validity);
 CompressedSet merge_compressedsets(CompressedSet C1, CompressedSet C2);
-bool can_merge(CompressedSet c1, CompressedSet c2);
+bool tightness_evaluation_cset(CompressedSet C);
 
 bool add_to_pqueue(PriorityQueue * pq, hierc_element element);
 bool pop_from_pqueue(PriorityQueue * pq);
