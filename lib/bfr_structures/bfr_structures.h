@@ -50,7 +50,7 @@ typedef struct {
 RetainedSet init_retained_set();
 CompressedSets init_compressed_sets();
 Cluster * init_cluster(int k);
-PriorityQueue* createPriorityQueue(int capacity);
+PriorityQueue createPriorityQueue(int capacity);
 
 
 void print_clusters(Cluster * clusters);

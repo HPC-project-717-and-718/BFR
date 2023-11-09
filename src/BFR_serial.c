@@ -312,7 +312,7 @@ void secondary_compression_criteria(RetainedSet * R, Cluster * clusters, Compres
 
 
     if(DEBUG) printf("      Freeing miniclusters.\n");
-    //free(miniclusters);
+    free(miniclusters);
 
     // if (C->number_of_sets > 0){
     //     int size_of_C = C->number_of_sets;
@@ -541,7 +541,7 @@ int main(int argc, char ** argv){
     free(R.points);
 
     free(C.sets);
-    fclose(stream_cursor);
+    fclose((FILE*)stream_cursor);
     if(DEBUG) printf("Execution complete!.\n");
     return 0;
 }

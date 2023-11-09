@@ -178,7 +178,7 @@ bool tightness_evaluation_cluster(Cluster c, int * tightness_flag, int index){
             tightness_flag[index] = 1;
             return false;
         }
-        int * x_sub = malloc(M * sizeof(int));
+        int x_sub[M];
         int i = 0;
         for (i = 0; i < M; i++){
             x_sub[i] = c.sum[i];
