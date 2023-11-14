@@ -198,6 +198,31 @@ void print_retainedset(RetainedSet R){
     }
 }
 
+void print_priorityqueue(PriorityQueue* pq){
+    //print priority queue in order of priority
+    printf("Priority Queue: \n");
+    PriorityQueue pq2_actual = createPriorityQueue(pq->capacity);
+    PriorityQueue * pq2 = &pq2_actual;
+    pq2->size = pq->size;
+    int j = 0;
+    for (j = 0; j < pq->size; j++){
+        pq2->data[j].distance = pq->data[j].distance;
+        pq2->data[j].index_of_cset_1 = pq->data[j].index_of_cset_1;
+        pq2->data[j].index_of_cset_2 = pq->data[j].index_of_cset_2;
+    }
+    while (pq2->size != 0){
+        hierc_element * hd2 = top_from_pqueue(*pq2);
+        pop_from_pqueue(pq2);
+        if ( hd2 == false ){
+            printf("error in pop function, the size vlaue do not correspond to real size of vector\n");
+            exit(2);
+        }
+        printf("%lf ", hd2->distance);
+        free(hd2);
+    }
+    printf("\n");
+    free(pq2->data);
+}
 
 void add_point_to_retained_set(RetainedSet * R, Point p){
     (*R).number_of_points += 1;
@@ -296,25 +321,48 @@ CompressedSet merge_compressedsets(CompressedSet C1, CompressedSet C2){
     return C;
 }
 
-void remove_compressedset(CompressedSets * C, int i, int j, bool * cset_validity){
-    cset_validity[i] = false;
-    cset_validity[j] = false;
+void remove_compressedset(CompressedSets * C, int i, int j, bool ** cset_validity){
+    if(DEBUG) printf("Setting cset_validity's following values to false: %d %d\n", i, j);    
+    (*cset_validity)[i] = false;
+    (*cset_validity)[j] = false;
+
     if (C->sets == NULL){
         printf("Error: could not allocate memory\n");
         exit(1);
     }
+
+    if(DEBUG) {
+        int i = 0;
+        for(; i<C->number_of_sets; i++) {
+            printf("%d ", (*cset_validity)[i]);
+        }
+        printf("\n");
+    }
+    if(DEBUG) printf("Set cset_validity's following values to false: %d %d\n", i, j);    
 }
 
-void add_compressedset(CompressedSets * C, CompressedSet C1, bool * cset_validity){
+void add_compressedset(CompressedSets * C, CompressedSet C1, bool ** cset_validity){
     (*C).number_of_sets += 1;
+
+    if(DEBUG) printf("Reallocating C.sets and cset_validity with size: %d\n", C->number_of_sets);
     (*C).sets = realloc(C->sets, C->number_of_sets * sizeof(CompressedSet));
-    // cset_validity = realloc(cset_validity, C->number_of_sets * sizeof(bool));
-    cset_validity[C->number_of_sets - 1] = true;
+    *cset_validity = realloc(*cset_validity, C->number_of_sets * sizeof(bool));
+    (*cset_validity)[C->number_of_sets - 1] = true;
+
     if (C->sets == NULL){
         printf("Error: could not allocate memory\n");
         exit(1);
     }
+    if(DEBUG) printf("Reallocated C.sets and cset_validity with size: %d\n", C->number_of_sets);
     (*C).sets[C->number_of_sets - 1] = C1;
+
+    if(DEBUG) {
+        int i = 0;
+        for(; i<C->number_of_sets; i++) {
+            printf("%d ", (*cset_validity)[i]);
+        }
+        printf("\n");
+    }
 }
 
 bool pop_from_pqueue(PriorityQueue *pq){
@@ -394,14 +442,18 @@ bool remove_from_pqueue(PriorityQueue *pq, int i1, int i2){
     for (j = 0; j < pq->size; j++){
         if (pq->data[j].index_of_cset_1 != i1 && pq->data[j].index_of_cset_2 != i2 && pq->data[j].index_of_cset_1 != i2 && pq->data[j].index_of_cset_2 != i1){
             add_to_pqueue(&pq2, pq->data[j]);
+            if(DEBUG) printf("Adding couple %d %d to prioqueue.\n\n\n", pq->data[j].index_of_cset_1, pq->data[j].index_of_cset_2);
         }
     }
-    // free(pq->data);
+
+    hierc_element * temporary_pointer = pq->data;
+    pq->data = NULL;
+    free(temporary_pointer);
     
-    pq = &pq2;
     pq->data = pq2.data;
     pq->size = pq2.size;
     pq->capacity = pq2.capacity;
+    if (DEBUG) printf("Items deleted from queue, new size: %d, new capacity: %d\n", pq->size, pq->capacity);
 }
 
 bool add_to_pqueue(PriorityQueue *pq, hierc_element hd){
@@ -421,14 +473,18 @@ bool add_to_pqueue(PriorityQueue *pq, hierc_element hd){
     * Returns:
     *   - void
     */
+    if (DEBUG) printf("Adding to priority queue: %lf, size: %d, capacity: %d\n", hd.distance, pq->size, pq->capacity);
     if (pq->size == pq->capacity){
+        if (DEBUG) printf("Size has reached capacity: %d = %d\n", pq->size, pq->capacity);
         return false;
     }
+    if(DEBUG) printf("Adding hd: %lf %d %d\n", hd.distance, hd.index_of_cset_1, hd.index_of_cset_2);
     pq->data[pq->size] = hd;
     pq->size += 1;
 
     // "Sift up" the new element.
     int i = pq->size - 1;
+    if (DEBUG) printf("     prioqueue's current i: %d, value: %lf\n", i, pq->data[i].distance);
     while (i != 0 && pq->data[i].distance < pq->data[(i - 1) / 2].distance) {
         // Swap the new element with its parent.
         hierc_element temp = pq->data[i];
@@ -437,33 +493,10 @@ bool add_to_pqueue(PriorityQueue *pq, hierc_element hd){
 
         // Move to the parent.
         i = (i - 1) / 2;
+        if (DEBUG) printf("     prioqueue's current i: %d, value: %lf\n", i, pq->data[i].distance);
     }
-    if (DEBUG) printf("Added to priority queue: %lf\n", hd.distance);
-    // if (DEBUG){
-    //     //print priority queue in order of priority
-    //     printf("Priority Queue: \n");
-    //     PriorityQueue pq2_actual = createPriorityQueue(pq->capacity);
-    //     PriorityQueue * pq2 = &pq2_actual;
-    //     pq2->size = pq->size;
-    //     int j = 0;
-    //     for (j = 0; j < pq->size; j++){
-    //         pq2->data[j] = pq->data[j];
-    //     }
-    //     while (pq2->size != 0){
-    //         hierc_element * hd2 = top_from_pqueue(*pq2);
-    //         pop_from_pqueue(pq2);
-    //         if ( hd2 == false ){
-    //             printf("error in pop function, the size vlaue do not correspond to real size of vector\n");
-    //             exit(2);
-    //         }
-    //         printf("%lf ", hd2->distance);
-    //         free(hd2);
-    //     }
-    //     printf("\n");
-    //     free(pq2->data);
-    //     free(pq2);
-    // }
-
+    if (DEBUG) printf("Added to priority queue: %lf\n\n", hd.distance);
+    
     return true;
 }
 
@@ -571,7 +604,7 @@ void restore_csets(CompressedSets * C, bool * cset_validity){
     int i;
     for (i=0; i<C->number_of_sets; i++){
         if (cset_validity[i]){
-            add_compressedset(&C2, C->sets[i], cset_validity);
+            add_compressedset(&C2, C->sets[i], &cset_validity);
         }
     }
 
@@ -638,75 +671,78 @@ void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclu
     if(DEBUG) printf("\n\nNumber of compressed sets after adding miniclusters: %d\n\n", C->number_of_sets);
 
     bool stop_merging = false;
-    // bool * cset_validity = malloc(C->number_of_sets * sizeof(bool));
-    bool cset_validity[MAX_SIZE_OF_BUFFER * (MAX_SIZE_OF_BUFFER - 1) / 2];
+    bool * cset_validity = malloc(C->number_of_sets * sizeof(bool));
+    // bool cset_validity[MAX_SIZE_OF_BUFFER * (MAX_SIZE_OF_BUFFER - 1) / 2];
     int i;
     for (i=0; i<C->number_of_sets; i++){
         cset_validity[i] = true;
     }
 
     // calculate distances between compressed sets
-    PriorityQueue pq_actual = createPriorityQueue(C->number_of_sets * (C->number_of_sets - 1) / 2);
-    PriorityQueue * pq = &pq_actual;
+    PriorityQueue pq = createPriorityQueue(C->number_of_sets * (C->number_of_sets - 1) / 2);
+    if(DEBUG) printf("Adding all possible combinations of sets.\n");
     for (i=0; i<C->number_of_sets; i++){
         int j;
         for (j=i+1; j<C->number_of_sets; j++){
+            if(DEBUG) printf("i: %d, j: %d\n", i, j);
             hierc_element hd;
             hd.distance = distance_compressedsets(C->sets[i], C->sets[j]);
             hd.index_of_cset_1 = i;
             hd.index_of_cset_2 = j;
-            add_to_pqueue(pq, hd);
+            add_to_pqueue(&pq, hd);
         }
     };
+    if(DEBUG) printf("Added all possible combinations of sets.\n");
 
+    int number_of_merges = 0;
     // naive implementation of hierchical clustering over miniclusters and compressed sets
     while (!stop_merging){
+        // if(DEBUG) print_priorityqueue(pq);
         // top element of priority queue
-        hierc_element * hd = top_from_pqueue(*pq);
+        hierc_element * hd = top_from_pqueue(pq);
         if (hd == NULL){
             stop_merging = true;
         }else{
             CompressedSet merged = merge_compressedsets(C->sets[hd->index_of_cset_1], C->sets[hd->index_of_cset_2]);
-            pop_from_pqueue(pq);
+            pop_from_pqueue(&pq);
             if(tightness_evaluation_cset(merged)){
+                number_of_merges++;
                 //TODO: merge and remove from priority queue all element with same index and calculate new distance between merged and all other compressed sets
                 // remove_from_pqueue(pq, hd->index_of_cset_1, hd->index_of_cset_2);
-                add_compressedset(C, merged, cset_validity);
+                add_compressedset(C, merged, &cset_validity);
 
-                remove_compressedset(C, hd->index_of_cset_1, hd->index_of_cset_2, cset_validity);
+                remove_compressedset(C, hd->index_of_cset_1, hd->index_of_cset_2, &cset_validity);
 
-                remove_from_pqueue(pq, hd->index_of_cset_1, hd->index_of_cset_2);
-
+                remove_from_pqueue(&pq, hd->index_of_cset_1, hd->index_of_cset_2);
+                
                 //calculate distances between merged and all other compressed sets
                 int i;
                 for (i=0; i<(C->number_of_sets-1); i++){
                     if (cset_validity[i]){
+                        if(DEBUG) printf("i: %d\n", i);
                         hierc_element hd;
                         hd.distance = distance_compressedsets(C->sets[i], merged);
                         hd.index_of_cset_1 = i;
                         hd.index_of_cset_2 = C->number_of_sets - 1;
-                        add_to_pqueue(pq, hd);
+                        add_to_pqueue(&pq, hd);
                     }
                 }
+                if(DEBUG) printf("Finished adding new combinations containing new set.\n");
             }
         }
-        if (is_empty_pqueue(pq)){
+        if (is_empty_pqueue(&pq)){
             stop_merging = true;
         }
         free(hd);
     }
 
+    if(DEBUG) printf("Restoring compressed sets based n cset_validity.\n");
     restore_csets(C, cset_validity);
 
-    // free(cset_validity);
-    if(pq->data != NULL) free(pq->data);
-
-    // TODO: merge compressed sets using hierarchical clustering
-    // priority queue pseudocode (naive implementation is also possible, I don't care tbh)
-    // priority queue of compressed sets
-    // while (priority queue is not empty){
-    //     pop two compressed sets
-    //     merge them if they fit criteria (to be discussed)
-    //     push merged compressed set to priority queue, if it fits criteria
-    // }
+    if(cset_validity != NULL) {
+        bool* cset_pointer = cset_validity;
+        cset_validity = NULL;
+        free(cset_pointer);
+    }
+    if(pq.data != NULL) free(pq.data);
 }
