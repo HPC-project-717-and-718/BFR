@@ -341,28 +341,52 @@ void remove_compressedset(CompressedSets * C, int i, int j, bool ** cset_validit
     if(DEBUG) printf("Set cset_validity's following values to false: %d %d\n", i, j);    
 }
 
-void add_compressedset(CompressedSets * C, CompressedSet C1, bool ** cset_validity){
+bool * add_compressedset(CompressedSets * C, CompressedSet C1, bool * cset_validity){
+    /*
+    * Add compressed set
+    *
+    * Algorithm:
+    *   1. increase number of sets
+    *   2. reallocate memory for sets
+    *   3. add compressed set to sets
+    *
+    * Parameters:
+    *   - C: compressed sets
+    *   - C1: compressed set to add
+    *
+    * Returns:
+    *   - temp_validity: array of bools indicating if compressed set is valid, if temp_validity[i] == true, then i can be added to the new CompressedSets
+    */
     (*C).number_of_sets += 1;
 
     if(DEBUG) printf("Reallocating C.sets and cset_validity with size: %d\n", C->number_of_sets);
     (*C).sets = realloc(C->sets, C->number_of_sets * sizeof(CompressedSet));
-    *cset_validity = realloc(*cset_validity, C->number_of_sets * sizeof(bool));
-    (*cset_validity)[C->number_of_sets - 1] = true;
-
-    if (C->sets == NULL){
+    if ((*C).sets == NULL){
         printf("Error: could not allocate memory\n");
         exit(1);
     }
+
+    bool* temp_validity = realloc(cset_validity, C->number_of_sets * sizeof(bool));
+    if (temp_validity == NULL){
+        printf("Error: could not allocate memory\n");
+        exit(1);
+    }
+
+    temp_validity[C->number_of_sets - 1] = true;
+
+    
     if(DEBUG) printf("Reallocated C.sets and cset_validity with size: %d\n", C->number_of_sets);
-    (*C).sets[C->number_of_sets - 1] = C1;
+    C->sets[C->number_of_sets - 1] = C1;
 
     if(DEBUG) {
         int i = 0;
         for(; i<C->number_of_sets; i++) {
-            printf("%d ", (*cset_validity)[i]);
+            printf("%d ", temp_validity[i]);
         }
         printf("\n");
     }
+
+    return temp_validity;
 }
 
 bool pop_from_pqueue(PriorityQueue *pq){
@@ -581,7 +605,7 @@ bool is_empty_pqueue(PriorityQueue * pq){
     }
 }
 
-void restore_csets(CompressedSets * C, bool * cset_validity){
+bool * restore_csets(CompressedSets * C, bool * cset_validity){
     /*
     * Restore compressed sets
     *
@@ -596,21 +620,28 @@ void restore_csets(CompressedSets * C, bool * cset_validity){
     *   - cset_validity: array of bools indicating if compressed set is valid, if cset_validity[i] == true, then i can be added to the new CompressedSets
     *
     * Returns:
-    *   - void
+    *   - cset_validity: array of bools indicating if compressed set is valid, if cset_validity[i] == true, then i can be added to the new CompressedSets
     */
     CompressedSets C2;
     C2.number_of_sets = 0;
     C2.sets = NULL;
+    
     int i;
     for (i=0; i<C->number_of_sets; i++){
+        bool * newtemp_cv = cset_validity;
         if (cset_validity[i]){
-            add_compressedset(&C2, C->sets[i], &cset_validity);
+            newtemp_cv = add_compressedset(&C2, C->sets[i], cset_validity);
+        }
+        if (newtemp_cv != cset_validity) {
+            // free(cset_validity);
+            cset_validity = newtemp_cv;
         }
     }
 
     free(C->sets);
     C->number_of_sets = C2.number_of_sets;
     C->sets = C2.sets;
+    return cset_validity;
 }
 
 bool tightness_evaluation_cset(CompressedSet c){
@@ -709,7 +740,9 @@ void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclu
                 number_of_merges++;
                 //TODO: merge and remove from priority queue all element with same index and calculate new distance between merged and all other compressed sets
                 // remove_from_pqueue(pq, hd->index_of_cset_1, hd->index_of_cset_2);
-                add_compressedset(C, merged, &cset_validity);
+                bool * newtemp_cv = add_compressedset(C, merged, cset_validity);
+                // free(cset_validity);
+                cset_validity = newtemp_cv;
 
                 remove_compressedset(C, hd->index_of_cset_1, hd->index_of_cset_2, &cset_validity);
 
@@ -733,16 +766,20 @@ void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclu
         if (is_empty_pqueue(&pq)){
             stop_merging = true;
         }
-        free(hd);
+        if (hd != NULL) free(hd);
     }
 
     if(DEBUG) printf("Restoring compressed sets based n cset_validity.\n");
-    restore_csets(C, cset_validity);
+    bool* temp_validity = restore_csets(C, cset_validity);
+    // free(cset_validity);
+    cset_validity = temp_validity;
 
     if(cset_validity != NULL) {
         bool* cset_pointer = cset_validity;
-        cset_validity = NULL;
+        // cset_validity = NULL;
         free(cset_pointer);
+        cset_pointer = NULL;
+        cset_validity = NULL;
     }
     if(pq.data != NULL) free(pq.data);
 }
