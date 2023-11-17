@@ -1,4 +1,5 @@
 #include "bfr_structures.h"
+#include <unistd.h>
 
 RetainedSet init_retained_set(){
     /*
@@ -40,6 +41,22 @@ CompressedSets init_compressed_sets(){
     return C;
 }
 
+data_streamer duplicate_data_stream(data_streamer original) {
+    int original_fd = fileno(original);
+    int new_fd = dup(original_fd);
+    if (new_fd == -1) {
+        perror("Failed to duplicate file descriptor");
+        return NULL;
+    }
+    data_streamer new_stream = fdopen(new_fd, "r");
+    if (!new_stream) {
+        perror("Failed to open new file stream");
+        close(new_fd);
+        return NULL;
+    }
+    return new_stream;
+}
+
 Cluster * init_cluster(int k){
     /*
     * Initialize clusters
@@ -57,7 +74,7 @@ Cluster * init_cluster(int k){
     Cluster * clusters = malloc(k * sizeof(Cluster));
     
     if (clusters == NULL){
-        printf("Error: could not allocate memory\n");
+        perror("Error: could not allocate memory\n");
         exit(1);
     }
 
@@ -95,7 +112,7 @@ data_streamer data_streamer_Init(char * file_name, char * mode){
     */
     FILE * file = fopen(file_name, mode);
     if (file == NULL){
-        printf("Error: could not open file\n");
+        perror("Error: could not open file\n");
         exit(1);
     }
 
@@ -214,7 +231,7 @@ void print_priorityqueue(PriorityQueue* pq){
         hierc_element * hd2 = top_from_pqueue(*pq2);
         pop_from_pqueue(pq2);
         if ( hd2 == false ){
-            printf("error in pop function, the size vlaue do not correspond to real size of vector\n");
+            perror("error in pop function, the size vlaue do not correspond to real size of vector\n");
             exit(2);
         }
         printf("%lf ", hd2->distance);
@@ -228,7 +245,7 @@ void add_point_to_retained_set(RetainedSet * R, Point p){
     (*R).number_of_points += 1;
     (*R).points = realloc(R->points, R->number_of_points * sizeof(Point));
     if (R->points == NULL){
-        printf("Error: could not allocate memory\n");
+        perror("Error: could not allocate memory\n");
         exit(1);
     }
     (*R).points[R->number_of_points - 1] = p;
@@ -297,7 +314,7 @@ void add_miniclusters_to_compressedsets(CompressedSets * C, Cluster * minicluste
             (*C).number_of_sets += 1;
             (*C).sets = realloc(C->sets, C->number_of_sets * sizeof(CompressedSet));
             if (C->sets == NULL){
-                printf("Error: could not allocate memory\n");
+                perror("Error: could not allocate memory\n");
                 exit(1);
             }
             (*C).sets[C->number_of_sets - 1].number_of_points = miniclusters[i].size;
@@ -327,7 +344,7 @@ void remove_compressedset(CompressedSets * C, int i, int j, bool ** cset_validit
     (*cset_validity)[j] = false;
 
     if (C->sets == NULL){
-        printf("Error: could not allocate memory\n");
+        perror("Error: could not allocate memory\n");
         exit(1);
     }
 
@@ -362,13 +379,13 @@ bool * add_compressedset(CompressedSets * C, CompressedSet C1, bool * cset_valid
     if(DEBUG) printf("Reallocating C.sets and cset_validity with size: %d\n", C->number_of_sets);
     (*C).sets = realloc(C->sets, C->number_of_sets * sizeof(CompressedSet));
     if ((*C).sets == NULL){
-        printf("Error: could not allocate memory\n");
+        perror("Error: could not allocate memory\n");
         exit(1);
     }
 
     bool* temp_validity = realloc(cset_validity, C->number_of_sets * sizeof(bool));
     if (temp_validity == NULL){
-        printf("Error: could not allocate memory\n");
+        perror("Error: could not allocate memory\n");
         exit(1);
     }
 

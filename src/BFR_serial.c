@@ -5,8 +5,9 @@ void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_
     * Take K random centroids from input space
     *
     * Algorithm:
-    *   1. take K random points from input space
-    *   2. set these points as centroids
+    *   1. take one random point from input space
+    *   2. take K-1 centroids, the decision is made by each turn take the most distant points from the already chosen
+    *   3. update cluster with the new centroid
     *
     * Parameters:
     *   - clusters: array of clusters
@@ -15,25 +16,47 @@ void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_
     * Returns:
     *   - void
     */
-    int i = 0;
+
     srand(time(NULL));
-    for (i = 0; i < K; i++){
-        // centroid are random points in N^M space
-        Point p;
+    // take one random point from input space
+    int random_index = rand() % size_of_data_buffer;
+    clusters[0].centroid = data_buffer[random_index];
+    clusters[0].size = 1;
+
+    int i = 0;
+    for(; i<M; i++){
+        clusters[0].sum[i] = data_buffer[random_index].coords[i];
+        clusters[0].sum_squares[i] = pow(data_buffer[random_index].coords[i], 2);
+    }
+
+    i=1;
+    // take K-1 centroids, the decision is made by each turn take the most distant points from the already chosen
+    for (; i < K; i++) {
+        double max_distance = 0;
+        int index_of_max = 0;
         int j = 0;
-        int r = lround(size_of_data_buffer * (1.0 * rand() / RAND_MAX));
-        for (j = 0; j < M; j++){
-            /* Pointers to the randomly picked point */
-            
-            p.coords[j] = data_buffer[r].coords[j];
-            clusters[i].sum[j] += p.coords[j];
-            clusters[i].sum_squares[j] += pow(p.coords[j], 2);
+        for (j = 0; j < size_of_data_buffer; j++) {
+            double current_distance = 0;
+            int k = 0;
+            for (k = 0; k < i; k++) {
+                current_distance += distance((Pointer)&(clusters[k].centroid), (Pointer)&(data_buffer[j]));
+            }
+            if (current_distance > max_distance) {
+                max_distance = current_distance;
+                index_of_max = j;
+            }
         }
-        p.cluster = i;
-        clusters[i].centroid = p;
+        clusters[i].centroid = data_buffer[index_of_max];
         clusters[i].size = 1;
+
+        int k = 0;
+        for(; k<M; k++){
+            clusters[i].sum[k] = data_buffer[index_of_max].coords[k];
+            clusters[i].sum_squares[k] = pow(data_buffer[index_of_max].coords[k], 2);
+        }
     }
 }
+    
 
 bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, int * offset){
     /*

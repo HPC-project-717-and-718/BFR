@@ -58,6 +58,7 @@ void print_compressedsets(CompressedSets C);
 void print_retainedset(RetainedSet R);
 
 
+data_streamer duplicate_data_streamer(data_streamer ds);
 void add_point_to_retained_set(RetainedSet * R, Point p);
 void update_cluster(Cluster * cluster, Point p);
 void update_centroids(Cluster ** clusters, int number_of_clusters);
