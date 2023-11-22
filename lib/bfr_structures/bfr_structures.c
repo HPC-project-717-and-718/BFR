@@ -550,20 +550,21 @@ double distance_compressedsets(CompressedSet c1, CompressedSet c2){
     // calculate the two centroids coordinates
     double * coord_c1 = malloc(M * sizeof(double));
     double * coord_c2 = malloc(M * sizeof(double));
+    int i;
 
     // calculate centroid for c1
-    for (int i = 0; i < M; i++) {
+    for (i = 0; i < M; i++) {
         coord_c1[i] = (double)c1.sum[i] / c1.number_of_points;
     }
 
     // calculate centroid for c2
-    for (int i = 0; i < M; i++) {
+    for (i = 0; i < M; i++) {
         coord_c2[i] = (double)c2.sum[i] / c2.number_of_points;
     }
 
     // calculate the distance between the two centroids
     double distance = 0;
-    for (int i = 0; i < M; i++) {
+    for (i = 0; i < M; i++) {
         distance += pow(coord_c1[i] - coord_c2[i], 2);
     }
     distance = sqrt(distance);
