@@ -17,13 +17,14 @@ double mahalanobis_distance(Cluster c, Point p){
     * Returns:
     *   - the # of standard deviations of a point from centroid across the dimensions
     */
-    double sum = 0., variance = 0., standard_deviation = 0.;
+    double sum = 0., sum_partial = 0., variance = 0.;
     int i = 0;
     for (i = 0; i < M; i++){
         variance = (c.sum_squares[i] / c.size) - pow((c.sum[i] / c.size), 2);
-        standard_deviation = sqrt(variance);
-        if(standard_deviation < 0.0001) standard_deviation = 1;
-        sum += pow(( (p.coords[i] - c.centroid.coords[i]) / standard_deviation ), 2);
+        if(variance < 0.0001) variance = 0.0001;
+        sum_partial = pow((p.coords[i] - c.centroid.coords[i]) , 2);
+        sum = sum + (sum_partial / variance);
+        // sum += pow(( (p.coords[i] - c.centroid.coords[i]) / standard_deviation ), 2);
         // I was almost going crazy with this part lol
         // if(DEBUG) printf("      Partial2: %lf, Partial1: %lf\n", (c.sum_squares[i] / c.size), pow((c.sum[i] / c.size), 2));
         // if(DEBUG) printf("      SUMSQ: %lf, SUM: %lf, N: %d.\n", c.sum_squares[i], c.sum[i], c.size);
