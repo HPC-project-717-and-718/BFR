@@ -9,7 +9,7 @@ if not int(dimensions) >= 2:
     sys.exit("Dimensions must be 2 or higher.")
 
 number_of_points = int(dimensions) * 2000
-number_of_gaussians = 2
+number_of_gaussians = 10
 minimum_mean, maximum_mean = -5, 5
 minimum_covariance, maximum_covariance = 0.7, 1.5
 
@@ -26,6 +26,28 @@ covariances_diagonal = np.zeros((number_of_gaussians, int(dimensions), int(dimen
 covariances = np.random.uniform(minimum_covariance, maximum_covariance, (number_of_gaussians, int(dimensions)))
 for i in range(number_of_gaussians):
     covariances_diagonal[i] = np.diag(covariances[i])
+
+# Step 1.5. Save gaussian data
+gaussian_data = output_file[:-4]
+gaussian_data = gaussian_data + "_info.txt"
+
+gaussian_data = open(gaussian_data, "w")
+# gaussian_data.write("Means:\n")
+for i in range(number_of_gaussians):
+    gaussian_data.write("Gaussian " + str(i) + ":\n")
+    for j in range(int(dimensions)):
+        gaussian_data.write(str(means[i][j]) + " ")
+    gaussian_data.write("\n")
+    for j in range(int(dimensions)):
+        gaussian_data.write(str(covariances[i][j]) + " ") 
+    gaussian_data.write("\n")
+
+# # gaussian_data.write("\nCovariances:\n")
+# for i in range(number_of_gaussians):
+#     gaussian_data.write(str(i) + " " + str(covariances_diagonal[i]) + "\n")
+
+gaussian_data.close()
+
 
 # Step 2. Generate number_of_points points
 points = np.zeros((number_of_points, int(dimensions)))
