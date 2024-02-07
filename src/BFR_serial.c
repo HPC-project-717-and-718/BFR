@@ -17,23 +17,44 @@ void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_
     *   - void
     */
 
+    if(DEBUG) printf("Choosing centroids.\n");
+
     srand(time(NULL));
     // take one random point from input space
     int random_index = rand() % size_of_data_buffer;
     clusters[0].centroid = data_buffer[random_index];
     clusters[0].size = 1;
 
+    double max_distance = 0., min_distance = DBL_MAX;
+    int index_of_max = 0, index_of_min = 0;
+    int j;
+    for(j = 0; j < size_of_data_buffer; j++){
+        double current_distance = 0.;
+        int k = 0;
+        current_distance += distance((Pointer) & (clusters[0].centroid), (Pointer) & (data_buffer[j]));
+        if (current_distance < min_distance && current_distance != 0.)
+        {
+            min_distance = current_distance;
+            index_of_min = j;
+        }
+    }
+
     int i = 0;
     for(; i<M; i++){
-        clusters[0].sum[i] = data_buffer[random_index].coords[i];
-        clusters[0].sum_squares[i] = pow(data_buffer[random_index].coords[i], 2);
+        clusters[0].sum[i] = data_buffer[random_index].coords[i] + data_buffer[index_of_min].coords[i];
+        clusters[0].sum_squares[i] = pow(data_buffer[random_index].coords[i], 2) + pow(data_buffer[index_of_min].coords[i], 2);
     }
+    clusters[0].size = 2;
+
+    if(DEBUG) printf("Choosing K-1 centroids.\n");
 
     i=1;
     // take K-1 centroids, the decision is made by each turn take the most distant points from the already chosen
     for (; i < K; i++) {
-        double max_distance = 0;
-        int index_of_max = 0;
+        max_distance = 0.;
+        index_of_max = 0;
+        min_distance = 0.;
+        index_of_min = 0;
         int j = 0;
         for (j = 0; j < size_of_data_buffer; j++) {
             double current_distance = 0;
@@ -49,12 +70,41 @@ void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_
         clusters[i].centroid = data_buffer[index_of_max];
         clusters[i].size = 1;
 
+        for(j = 0; j < size_of_data_buffer; j++){
+            double current_distance = 0.;
+            int k = 0;
+            current_distance += distance((Pointer) & (clusters[i].centroid), (Pointer) & (data_buffer[j]));
+            if (current_distance < min_distance && current_distance != 0.)
+            {
+                min_distance = current_distance;
+                index_of_min = j;
+            }
+        }
+
         int k = 0;
         for(; k<M; k++){
-            clusters[i].sum[k] = data_buffer[index_of_max].coords[k];
-            clusters[i].sum_squares[k] = pow(data_buffer[index_of_max].coords[k], 2);
+            clusters[i].sum[k] = data_buffer[index_of_max].coords[k] + data_buffer[index_of_min].coords[k];
+            clusters[i].sum_squares[k] = pow(data_buffer[index_of_max].coords[k], 2) + pow(data_buffer[index_of_min].coords[k], 2);
+        }
+        clusters[i].size = 2;
+    }
+    if(DEBUG) printf("All centroids chosen.\n");
+    update_centroids(&clusters, K);
+
+    if(DEBUG){
+        int j = 0;
+        for(; j<K; j++){
+            printf("Centroid %d: ", j);
+
+            int i = 0;
+            for(; i<M; i++){
+                printf("%lf ", clusters[j].centroid.coords[i]);
+            }
+            printf("\n");
         }
     }
+    
+
 }
     
 
@@ -230,8 +280,8 @@ bool primary_compression_criteria(Cluster * clusters, Point p){
 
     if (min_distance < T){
         if(DEBUG) printf("      Minimal distance is %lf and is under threshold, updating cluster %d with point.\n", min_distance, min_cluster);
-        //add point to cluster whose distance from the centroid is minimal
-        update_cluster(&clusters[min_cluster], p);
+        //add point to cluster whose distance from the centroid is minimal, if distance != 0. (the point is not the starting centroid)
+        if(min_distance != 0.) update_cluster(&clusters[min_cluster], p);
         if(DEBUG) printf("      Cluster %d updated.\n", min_cluster);
         return true;
     }
@@ -527,15 +577,15 @@ int main(int argc, char ** argv){
 
             if(DEBUG) printf("Printing.\n");
             //print clusters
-            print_clusters(clusters);
+            // print_clusters(clusters);
 
             //print compressed sets
-            print_compressedsets(C);
+            // print_compressedsets(C);
 
             //print retained set
-            print_retainedset(R);
+            // print_retainedset(R);
 
-            printf("\n\n");
+            // printf("\n\n");
         }
 
         first_round = false;
@@ -556,6 +606,12 @@ int main(int argc, char ** argv){
         //print retained set
         print_retainedset(R);
     }
+    //print clusters
+    print_clusters(clusters);
+    //print compressed sets
+    print_compressedsets(C);
+    //print retained set
+    print_retainedset(R);
     
     if(DEBUG) printf("Freeing data.\n");
     free(clusters);

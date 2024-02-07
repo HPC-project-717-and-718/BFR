@@ -7,3 +7,9 @@
 
 #ignore test plots
 /utils/test*
+
+#ignore hpc output files
+bfr_serial.sh.*
+
+#ignore data
+/data
