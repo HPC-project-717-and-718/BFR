@@ -23,6 +23,73 @@ cluster *initClustersWithCentroids(FILE *inputFile, Point *data_buffer, int size
     return clusters;
 }
 
+void hierchieal_clustering_thr(CompressedSets * C){
+    // TODO: implement this function
+    // hierchieal clustering of the compressed sets
+
+    bool stop_criteria = false;
+    bool changes = false;
+
+    float **distance_matrix =  malloc (sizeof(float *) * C->size);
+    for (int i = 0; i < C->size; i++) {
+        distance_matrix[i] = malloc (sizeof(float) * C->size);
+    }
+
+    while(!stop_criteria){
+        // 1. compute the distance matrix
+        if (changes) {
+            #pragma omp parallel for shared(distance_matrix, C)
+            for (int i = 0; i < C->size; i++) {
+                for (int j = 0; j < C->size; j++) {
+                    // TODO: implement distance function
+                    distance_matrix[i][j] = distance(C->compressedSets[i], C->compressedSets[j]);
+                    distance_matrix[j][i] = distance_matrix[i][j];
+                }
+            }
+        }
+
+        // 3. find the minimum distance in the distance matrix
+        float min_distance = FLT_MAX;
+        int min_i, min_j;
+
+        #pragma omp parallel for shared(distance_matrix, min_distance, min_i, min_j)
+        for (int i = 0; i < C->size; i++) {
+            for (int j = 0; j < C->size; j++) {
+                # pragma omp critical
+                if (distance_matrix[i][j] < min_distance) {
+                    min_distance = distance_matrix[i][j];
+                    min_i = i;
+                    min_j = j;
+                }
+            }
+        }
+
+        if (min_distance == FLT_MAX) {
+            stop_criteria = true;
+            break;
+        }
+
+        // 4. merge the two clusters with the minimum distance
+        new_cluster = merge(C->compressedSets[min_i], C->compressedSets[min_j]);
+
+        // 5. check the tightness of the new cluster
+        if (tightness(new_cluster) > T) {
+            // 6. add the new cluster to the compressed sets
+            add_cluster_to_compressed_sets(C, new_cluster);
+            // 7. remove the two clusters from the compressed sets
+            remove_cluster_from_compressed_sets(C, C->compressedSets[min_i]);
+            remove_cluster_from_compressed_sets(C, C->compressedSets[min_j]);
+            changes = true;
+        } else {
+            // 8. set the distance between the two clusters to infinity
+            distance_matrix[min_i][min_j] = FLT_MAX;
+            distance_matrix[min_j][min_i] = FLT_MAX;
+            changes = false;
+        }
+
+    }
+}
+
 void load_data(FILE *inputFile, Point *data_buffer, int offset, int rank, int round) {
     // TODO: implement the function
     // load DATA_BUFFER_SIZE points from the input file
@@ -35,13 +102,105 @@ void add_point_to_retained_set(RetainedSet *retainedSet, Point p) {
     // TODO: copy the function from the serial version
 }
 
-void primary_compression_criteria(Cluster *clusters, Point p) {
+void add_cluster_to_compressed_sets(CompressedSet *compressedSets, Cluster c) {
     // TODO: copy the function from the serial version
+}
+
+bool primary_compression_criteria(Cluster *clusters, Point p) {
+    // function copied from the serial version
+/*
+    * Description:
+    * Use the Mahalanobis distance to determine whether or not a point 
+    * can be added directly to a cluster.
+    *
+    * Algorithm:
+    *   1. check if point is close enough to some centroid, by using mahalanobis radius as a confidence measure
+    *   2. if it is, add it to the cluster
+    *   3. if not check the secondary compression criteria
+    *
+    * Parameters:
+    *   - clusters: array of clusters
+    *   - p: point to check
+    *
+    * Returns:
+    *   - true if point is added to cluster
+    *   - false if point is not added to cluster
+    * IMPORTANT: the two primary compression criteria are separate and mutually exclusive!
+    */
+
+    int i = 0, min_cluster;
+    double current_distance, min_distance = DBL_MAX;
+
+    if(DEBUG) printf("      Checking mahalanobis distance for point.\n");
+    for (i = 0; i < K; i++){
+        current_distance = mahalanobis_distance(clusters[i], p);
+        // if(DEBUG) printf("      Current distance: %lf.\n", current_distance);
+        if (current_distance < min_distance) {
+            min_distance = current_distance;
+            min_cluster = i;
+        }
+    }
+
+    if (min_distance < T){
+        if(DEBUG) printf("      Minimal distance is %lf and is under threshold, updating cluster %d with point.\n", min_distance, min_cluster);
+        //add point to cluster whose distance from the centroid is minimal, if distance != 0. (the point is not the starting centroid)
+        if(min_distance != 0.) update_cluster(&clusters[min_cluster], p);
+        if(DEBUG) printf("      Cluster %d updated.\n", min_cluster);
+        return true;
+    }
+    
+    if(DEBUG) printf("      No cluster fits the criteria, minimal distance is %lf.\n", min_distance);
+
+    return false;
 }
 
 void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSet *compressedSets) {
     // TODO: implement the function
-    // perform secondary compression criteria
+    /*
+    * Description:
+    * find a way to aggregate the retained set into miniclusters,
+    * and miniclusters with more than one element can be summarized in the compressed set.
+    * Outliers are kept in the retained set.
+    *
+    * Algorithm:
+    *   1. cluster retained set R with classical K-Means, creating k2 clusters
+    *   2. clusters that have a tightness measure above a certain threshold are added to the CompressedSet C
+    *   3. outliers are kept in the RetainedSet R
+    *   4. try aggregating compressed sets using statistics and hierchieal clustering
+    *
+    * Parameters:
+    *   - R: retained set
+    *   - clusters: array of clusters
+    *   - C: compressed sets
+    *
+    * Returns:
+    *   - void
+    */
+
+    // 1. cluster retained set R with classical K-Means, creating k2 clusters, also keep in R the outlayers
+    // TODO: implement the function K-Means with open mp
+    int k2;
+    Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, k2); //ALERT: not implemented yet
+
+    // 2. clusters that have a tightness measure above a certain threshold are added to the CompressedSet C 
+    // using open mp
+    #pragma omp parallel for shared(k2_clusters, C)
+    for (int i = 0; i < k2; i++){
+       add_cluster_to_compressed_sets(C, k2_clusters[i]);
+    }
+
+    free(k2_clusters);
+
+    // 4. try aggregating compressed sets using statistics and hierchieal clustering
+    hierchieal_clustering_thr(C); //ALERT: not implemented yet
+}
+
+bool read_point(Point *data_buffer, Point *p, int size, int *offset) {
+    bool end_of_buffer = false;
+
+    // TODO: implement the function
+
+    return end_of_buffer;
 }
 
 void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet *retainedSet, Point *data_buffer, int size) {
@@ -245,14 +404,15 @@ int main(int argc, char** argv) {
         // print the results
         PlotResults(clusters, retainedSet, compressedSets);
 
-        // free the memory
-        free(clusters);
-        free(retainedSet);
-        free(compressedSets);
-
-        // free the derived datatype
-        MPI_Type_free(&clusterType);
     }
+
+    // free the memory
+    free(clusters);
+    free(retainedSet);
+    free(compressedSets);
+
+    // free the derived datatype
+    MPI_Type_free(&clusterType);
 
     // Finalize the MPI environment
     MPI_Finalize();
