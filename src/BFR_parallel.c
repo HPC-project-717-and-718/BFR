@@ -12,7 +12,7 @@
 # define DIMENSION 2
 # define NUMBER_OF_THREADS 4
 
-cluster *initClustersWithCentroids(FILE *inputFile, Point *data_buffer, int size) {
+cluster *initClustersWithCentroids(Point *data_buffer, int size) {
     // TODO: implement the function, THIS IS JUST A NAIVE IMPLEMENTATION
     
     // take the first k points as centroids
@@ -98,9 +98,9 @@ void hierchieal_clustering_thr(CompressedSets * C){
         CompressedSet * newcset = merge_cset(compressedSets[min_i], C->compressedSets[min_j]);
 
         // 5. check the tightness of the new cluster
-        if (tightness(new_cluster) > T) {
+        if (tightness(new_cset> T) {
             // 6. add the new cluster to the compressed sets
-            add_cluster_to_compressed_sets(C, new_cluster);
+            add_cset_to_compressed_sets(C, new_cset);
             // 7. remove the two clusters from the compressed sets
             remove_cluster_from_compressed_sets(C, C->compressedSets[min_i]);
             remove_cluster_from_compressed_sets(C, C->compressedSets[min_j]);
@@ -127,7 +127,11 @@ void hierchieal_clustering_thr(CompressedSets * C){
 }
 
 void add_cluster_to_compressed_sets(CompressedSet *compressedSets, Cluster c) {
-    // TODO: copy the function from the serial version
+    // TODO: copy the function from the serial version trying to multithread it
+}
+
+void add_cset_to_compressed_sets(CompressedSet *compressedSets, CompressedSet c) {
+    // TODO: copy the function from the serial version trying to multithread it
 }
 
 bool primary_compression_criteria(Cluster *clusters, Point p) {
@@ -368,7 +372,7 @@ int main(int argc, char** argv) {
         // init the clusters with the centroids
         // can be done in multithread
         // as reference to implement see take_k_centorids() in serial version
-        clusters = initClustersWithCentroids(inputFile, data_buffer, DATA_BUFFER_SIZE);
+        clusters = initClustersWithCentroids(data_buffer, DATA_BUFFER_SIZE);
 
         
         for (int i = 1; i < size; i++) {
@@ -509,7 +513,7 @@ int main(int argc, char** argv) {
     free(compressedSets);
 
     // free the derived datatype
-    MPI_Type_free(&clusterType);
+    MPI_Type_free(&arrayclusterType);
 
     // Finalize the MPI environment
     MPI_Finalize();
