@@ -333,15 +333,18 @@ int main(int argc, char** argv) {
     //initialize the data streams from the input files
     FILE *inputFile;
     if (rank == MASTER) {
+        // TODO: revise the file opening
         inputFile = fopen("input.txt", "r");
         if (inputFile == NULL) {
             printf("Error opening input file\n");
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
-    }
 
-    // Broadcast the input file to all processes
-    MPI_Bcast(&inputFile, 1, MPI_FILE, MASTER, MPI_COMM_WORLD);
+        // Broadcast the input file to all processes
+        MPI_Bcast(&inputFile, 1, MPI_FILE, MASTER, MPI_COMM_WORLD);
+    }else{
+        MPI_Recv(&inputFile, 1, MPI_FILE, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
 
     Point * data_buffer; 
 
@@ -403,11 +406,14 @@ int main(int argc, char** argv) {
                 // the master receive the clusters from the other processes
                 // create a temporary clusters to store the clusters from the other processes   
                 Cluster *tempClusters;
+
+                tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
+
                 int i = 1;
                 for (; i < size; i++) {
                     MPI_Recv(tempClusters, 1, clusterType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     // update the clusters with the clusters from the other processes
-                    // TODO: is important to acknowledge that after the first round the values of the clusters for each dimension should be erased, if not the clusters will be updated readding also the values of the previous rounds
+                    // TODO: is important to acknowledge that after the first round the values of the clusters for each dimension should be erased, if not the clusters will be updated readding also the values of the previous rounds but only the master will have the correct values
                     int j = 0;
                     for (; j < K; j++) {
                         // TODO: NAIVE IMPLEMENTATION revise
@@ -419,6 +425,8 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
+                free(tempClusters);
+
                 // update the clusters
                 UpdateCentroids(clusters);
                 // send the updated clusters to the other processes
@@ -429,8 +437,36 @@ int main(int argc, char** argv) {
             } else {
                 // send the clusters to the master
                 MPI_Send(clusters, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
+
+                //create a temporary clusters to store the clusters from the master
+                Cluster *tempClusters;
+
+                tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
+
                 // receive the updated clusters from the master
-                MPI_Recv(clusters, 1, clusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_Recv(tempClusters, clusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                // update the clusters centroids with the clusters from the master
+                int j = 0;
+                for (; j < K; j++) {
+                    clusters[j].size += tempClusters[j].size;
+                    clusters[j].centroid = tempClusters[j].centroid;
+                }
+
+                free(tempClusters);
+
+                // erase the values of the clusters for each dimension in the array sum and sum_square
+                int j = 0;
+                for (; j < K; j++) {
+                    int d = 0;
+                    for (; d < DIMENSION; d++) {
+                        clusters[j].sum[d] = 0;
+                        clusters[j].sum_square[d] = 0;
+                    }
+                }
+
+
+
             }
 
             // TODO: we need to decided if the retained set and the compressed sets should be updated in the master or keep in the local processes
