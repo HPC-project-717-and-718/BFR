@@ -2,6 +2,7 @@
 #include <mpi.h>
 #include <omp.h>
 #include "../lib/kmeans_wrapper/kmeans_wrapper.h"
+#include "./BFR_parallel.h"
 
 // TODO: there will some problem here
 
@@ -16,11 +17,30 @@ cluster *initClustersWithCentroids(FILE *inputFile, Point *data_buffer, int size
     
     // take the first k points as centroids
     Cluster *clusters = (Cluster *)malloc(K * sizeof(Cluster));
-    for (int i = 0; i < K; i++) {
+    int i;
+    for (i = 0; i < K; i++) {
         clusters[i].centroid = data_buffer[i];
         clusters[i].size = 0;
     }
     return clusters;
+}
+
+CompressedSet *merge_cset(CompressedSet c1, CompressedSet c2) {
+    // allocate memory for the new compressed set
+    CompressedSet * new_cset = (CompressedSet *)malloc(sizeof(CompressedSet));
+
+
+    // merge the two compressed sets 
+    new_cset -> number_of_points = c1 -> number_of_points + c2 -> number_of_points;
+    
+    # pragma omp parallel for shared(new_cset, c1, c2)
+    int i;
+    for ( i = 0; i < M; i++){
+        new_cset -> sum[i] = c1 -> sum[i] + c2 -> sum[i];
+        new_cset -> sum_square[i] = c1 -> sum_square[i] + c2 -> sum_square[i];
+    }
+
+    return new_cset;
 }
 
 void hierchieal_clustering_thr(CompressedSets * C){
@@ -31,7 +51,8 @@ void hierchieal_clustering_thr(CompressedSets * C){
     bool changes = false;
 
     float **distance_matrix =  malloc (sizeof(float *) * C->size);
-    for (int i = 0; i < C->size; i++) {
+    int i;
+    for (i = 0; i < C->size; i++) {
         distance_matrix[i] = malloc (sizeof(float) * C->size);
     }
 
@@ -39,8 +60,10 @@ void hierchieal_clustering_thr(CompressedSets * C){
         // 1. compute the distance matrix
         if (changes) {
             #pragma omp parallel for shared(distance_matrix, C)
-            for (int i = 0; i < C->size; i++) {
-                for (int j = 0; j < C->size; j++) {
+            int i;
+            for (i = 0; i < C->size; i++) {
+                int j;
+                for (j = 0; j < C->size; j++) {
                     // TODO: implement distance function
                     distance_matrix[i][j] = distance(C->compressedSets[i], C->compressedSets[j]);
                     distance_matrix[j][i] = distance_matrix[i][j];
@@ -53,8 +76,10 @@ void hierchieal_clustering_thr(CompressedSets * C){
         int min_i, min_j;
 
         #pragma omp parallel for shared(distance_matrix, min_distance, min_i, min_j)
-        for (int i = 0; i < C->size; i++) {
-            for (int j = 0; j < C->size; j++) {
+        int i;
+        for (i = 0; i < C->size; i++) {
+            int j;
+            for (j = 0; j < C->size; j++) {
                 # pragma omp critical
                 if (distance_matrix[i][j] < min_distance) {
                     min_distance = distance_matrix[i][j];
@@ -69,8 +94,8 @@ void hierchieal_clustering_thr(CompressedSets * C){
             break;
         }
 
-        // 4. merge the two clusters with the minimum distance
-        new_cluster = merge(C->compressedSets[min_i], C->compressedSets[min_j]);
+        // 4. merge the two compressed set with the minimum distance
+        CompressedSet * newcset = merge_cset(compressedSets[min_i], C->compressedSets[min_j]);
 
         // 5. check the tightness of the new cluster
         if (tightness(new_cluster) > T) {
@@ -85,6 +110,8 @@ void hierchieal_clustering_thr(CompressedSets * C){
             distance_matrix[min_i][min_j] = FLT_MAX;
             distance_matrix[min_j][min_i] = FLT_MAX;
             changes = false;
+
+            free(newcset);
         }
 
     }
@@ -98,17 +125,13 @@ void load_data(FILE *inputFile, Point *data_buffer, int offset, int rank, int ro
     // round is the round of the algorithm
 }
 
-void add_point_to_retained_set(RetainedSet *retainedSet, Point p) {
-    // TODO: copy the function from the serial version
-}
-
 void add_cluster_to_compressed_sets(CompressedSet *compressedSets, Cluster c) {
     // TODO: copy the function from the serial version
 }
 
 bool primary_compression_criteria(Cluster *clusters, Point p) {
     // function copied from the serial version
-/*
+    /*
     * Description:
     * Use the Mahalanobis distance to determine whether or not a point 
     * can be added directly to a cluster.
@@ -132,6 +155,7 @@ bool primary_compression_criteria(Cluster *clusters, Point p) {
     double current_distance, min_distance = DBL_MAX;
 
     if(DEBUG) printf("      Checking mahalanobis distance for point.\n");
+    # pragma omp
     for (i = 0; i < K; i++){
         current_distance = mahalanobis_distance(clusters[i], p);
         // if(DEBUG) printf("      Current distance: %lf.\n", current_distance);
@@ -195,12 +219,40 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
     hierchieal_clustering_thr(C); //ALERT: not implemented yet
 }
 
-bool read_point(Point *data_buffer, Point *p, int size, int *offset) {
-    bool end_of_buffer = false;
+bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, int * offset){
+    //ALERT: FUNCTION COPIED FROM SERIAL VERSION
+    
+    /*
+    * Read a point from data buffer
+    *
+    * Algorithm:
+    *   1. read M coordinates from data buffer
+    *   2. if data buffer end is reached return false
+    *   3. else return true
+    *
+    * Parameters:
+    *   - data_buffer: buffer to read data from
+    *   - p: point to read
+    *
+    * Returns:
+    *   - true if point is read successfully
+    *   - false if EOF is reached
+    */
 
-    // TODO: implement the function
+    if(DEBUG) printf("  Reading point.\n");
+    if (*offset >= size_of_data_buffer){
+        return false;
+    }
 
-    return end_of_buffer;
+    //read M coordinates from data buffer
+    //TODO: check if this is the correct way to read from buffer
+    // ---> assuming that the interpretation of the buffer as a static array of point is valid, this should be fixed
+    int i = 0;
+    for (i = 0; i < M; i++){
+        p->coords[i] = (data_buffer[*offset]).coords[i];
+    }
+    (*offset)++;
+    return true;
 }
 
 void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet *retainedSet, Point *data_buffer, int size) {
@@ -217,6 +269,7 @@ void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet 
     for (offset = 0; offset < size_of_data_buffer; offset++) {
         if(read_point(data_buffer, &p, size_of_data_buffer, &offset)==0) {
             if (!primary_compression_criteria(clusters, p)) {
+                // this function is the same of the serial version, can be found in "bfr_structure.h"
                 add_point_to_retained_set(R, p);
             }
         }else {
