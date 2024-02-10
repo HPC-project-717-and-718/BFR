@@ -411,10 +411,12 @@ int main(int argc, char** argv) {
 
                 int i = 1;
                 for (; i < size; i++) {
-                    MPI_Recv(tempClusters, 1, clusterType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    MPI_Recv(tempClusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     // update the clusters with the clusters from the other processes
                     // TODO: is important to acknowledge that after the first round the values of the clusters for each dimension should be erased, if not the clusters will be updated readding also the values of the previous rounds but only the master will have the correct values
                     int j = 0;
+
+                    # pragma omp parallel for shared(tempClusters, clusters)
                     for (; j < K; j++) {
                         // TODO: NAIVE IMPLEMENTATION revise
                         clusters[j].size += tempClusters[j].size;
@@ -431,12 +433,13 @@ int main(int argc, char** argv) {
                 UpdateCentroids(clusters);
                 // send the updated clusters to the other processes
                 int i = 1;
+                # pragma omp parallel for shared(clusters)
                 for (; i < size; i++) {
-                    MPI_Send(clusters, 1, clusterType, i, 0, MPI_COMM_WORLD);
+                    MPI_Send(clusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD);
                 }
             } else {
                 // send the clusters to the master
-                MPI_Send(clusters, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
+                MPI_Send(clusters, 1, arrayclusterType, MASTER, 0, MPI_COMM_WORLD);
 
                 //create a temporary clusters to store the clusters from the master
                 Cluster *tempClusters;
@@ -444,7 +447,7 @@ int main(int argc, char** argv) {
                 tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
 
                 // receive the updated clusters from the master
-                MPI_Recv(tempClusters, clusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_Recv(tempClusters,1, arrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
                 // update the clusters centroids with the clusters from the master
                 int j = 0;
