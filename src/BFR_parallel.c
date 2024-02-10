@@ -117,12 +117,13 @@ void hierchieal_clustering_thr(CompressedSets * C){
     }
 }
 
-void load_data(FILE *inputFile, Point *data_buffer, int offset, int rank, int round) {
+ load_data(FILE *inputFile, Point *data_buffer, int offset, int rank, int round) {
     // TODO: implement the function
     // load DATA_BUFFER_SIZE points from the input file
-    // the offset is the position in the file to start reading
-    // rank is the rank of the process
-    // round is the round of the algorithm
+    if (stream_cursor == NULL){
+        printf("Error: invalid stream cursor\n");
+        return false;
+    }
 }
 
 void add_cluster_to_compressed_sets(CompressedSet *compressedSets, Cluster c) {
@@ -155,10 +156,11 @@ bool primary_compression_criteria(Cluster *clusters, Point p) {
     double current_distance, min_distance = DBL_MAX;
 
     if(DEBUG) printf("      Checking mahalanobis distance for point.\n");
-    # pragma omp
+    # pragma omp parallel for shared(min_distance, min_cluster, clusters, p)
     for (i = 0; i < K; i++){
         current_distance = mahalanobis_distance(clusters[i], p);
         // if(DEBUG) printf("      Current distance: %lf.\n", current_distance);
+        # pragma omp critical
         if (current_distance < min_distance) {
             min_distance = current_distance;
             min_cluster = i;
@@ -168,7 +170,7 @@ bool primary_compression_criteria(Cluster *clusters, Point p) {
     if (min_distance < T){
         if(DEBUG) printf("      Minimal distance is %lf and is under threshold, updating cluster %d with point.\n", min_distance, min_cluster);
         //add point to cluster whose distance from the centroid is minimal, if distance != 0. (the point is not the starting centroid)
-        if(min_distance != 0.) update_cluster(&clusters[min_cluster], p);
+        if(min_distance != 0.) update_cluster(&clusters[min_cluster], p); //ALERT: Function implemented in the file "bfr_structure.c", since has costant complexity it remains unvariated
         if(DEBUG) printf("      Cluster %d updated.\n", min_cluster);
         return true;
     }
@@ -341,13 +343,13 @@ int main(int argc, char** argv) {
     // Broadcast the input file to all processes
     MPI_Bcast(&inputFile, 1, MPI_FILE, MASTER, MPI_COMM_WORLD);
 
-    Point data_buffer[DATA_BUFFER_SIZE];
+    Point * data_buffer; 
 
     int offset = rank * DATA_BUFFER_SIZE;
     int round = 0;
 
     //use derived datatype to send the clusters to all processes
-    MPI_Datatype clusterType;
+    MPI_Datatype arrayclusterType; // array of cluster
 
     // TODO: implement the derived datatype for the cluster
 
@@ -355,7 +357,9 @@ int main(int argc, char** argv) {
     // init of the clusters made by the master
     if (rank == MASTER) {
         // load the data buffer from the input file with DATA_BUFFER_SIZE points
-        data_buffer = load_data(inputFile, offset, rank, round);
+        bool flag_loaded_data = load_data(inputFile, data_buffer, offset, rank, round);
+
+
         // increment the round
         round = round + 1;
         // init the clusters with the centroids
@@ -379,11 +383,12 @@ int main(int argc, char** argv) {
         // update the offset
         offset = rank * DATA_BUFFER_SIZE + round * size * DATA_BUFFER_SIZE;
         // load the data buffer from the input file with DATA_BUFFER_SIZE points
-        data_buffer = load_data(inputFile, offset, rank, round);
+        bool flag_loaded_data = load_data(inputFile, data_buffer, offset, rank, round);
         // increment the round
         round = round + 1;
 
         // catch exceptions data_buffer is NULL or data_buffer is not full
+        // TODO: ALERT THIS IF IS ERRONEOUS
         if (data_buffer == NULL || data_buffer.size() < DATA_BUFFER_SIZE) {
             stop_criteria = true;
         }
@@ -422,7 +427,7 @@ int main(int argc, char** argv) {
                     MPI_Send(clusters, 1, clusterType, i, 0, MPI_COMM_WORLD);
                 }
             } else {
-                // send the compressed sets to the master
+                // send the clusters to the master
                 MPI_Send(clusters, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
                 // receive the updated clusters from the master
                 MPI_Recv(clusters, 1, clusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);

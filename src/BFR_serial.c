@@ -293,6 +293,8 @@ bool primary_compression_criteria(Cluster * clusters, Point p){
 }
 
 bool second_primary_compression_criteria(Cluster * clusters, Point p){
+    // ALERT: this function is not used in the current implementation
+
     /*
     * Idea:
     * Takes the two closest centroids 
