@@ -1,18 +1,16 @@
 // Description: This file contains the parallel implementation of the BFR algorithm.
-#include <mpi.h>
-#include <omp.h>
-#include "../lib/kmeans_wrapper/kmeans_wrapper.h"
 #include "./BFR_parallel.h"
 
 // TODO: there will some problem here
 
-#define MASTER 0
-#define DEBUG 1
+# define MASTER 0
+# define DEBUG 1
 # define K 10
 # define DIMENSION 2
 # define NUMBER_OF_THREADS 4
+# define DATA_BUFFER_SIZE 250 // equal to serial's MAX_SIZE_OF_BUFFER / NUMBER_OF_THREADS
 
-cluster *initClustersWithCentroids(Point *data_buffer, int size) {
+Cluster *initClustersWithCentroids(Point *data_buffer, int size) {
     // TODO: implement the function, THIS IS JUST A NAIVE IMPLEMENTATION
     
     // take the first k points as centroids
@@ -25,7 +23,7 @@ cluster *initClustersWithCentroids(Point *data_buffer, int size) {
     return clusters;
 }
 
-CompressedSet *merge_cset(CompressedSet c1, CompressedSet c2) {
+CompressedSet *merge_cset(CompressedSet *c1, CompressedSet *c2) {
     // allocate memory for the new compressed set
     CompressedSet * new_cset = (CompressedSet *)malloc(sizeof(CompressedSet));
 
@@ -43,17 +41,17 @@ CompressedSet *merge_cset(CompressedSet c1, CompressedSet c2) {
     return new_cset;
 }
 
-void hierchieal_clustering_thr(CompressedSets * C){
+void hierachical_clustering_thr(CompressedSets * C){
     // TODO: implement this function
     // hierchieal clustering of the compressed sets
 
     bool stop_criteria = false;
     bool changes = false;
 
-    float **distance_matrix =  malloc (sizeof(float *) * C->size);
+    float **distance_matrix =  malloc (sizeof(float *) * C->number_of_sets);
     int i;
-    for (i = 0; i < C->size; i++) {
-        distance_matrix[i] = malloc (sizeof(float) * C->size);
+    for (i = 0; i < C->number_of_sets; i++) {
+        distance_matrix[i] = malloc (sizeof(float) * C->number_of_sets);
     }
 
     while(!stop_criteria){
@@ -61,11 +59,11 @@ void hierchieal_clustering_thr(CompressedSets * C){
         if (changes) {
             #pragma omp parallel for shared(distance_matrix, C)
             int i;
-            for (i = 0; i < C->size; i++) {
+            for (i = 0; i < C->number_of_sets; i++) {
                 int j;
-                for (j = 0; j < C->size; j++) {
+                for (j = 0; j < C->number_of_sets; j++) {
                     // TODO: implement distance function
-                    distance_matrix[i][j] = distance(C->compressedSets[i], C->compressedSets[j]);
+                    distance_matrix[i][j] = distance((Pointer) & (C->sets[i]), (Pointer) & (C->sets[j]));
                     distance_matrix[j][i] = distance_matrix[i][j];
                 }
             }
@@ -77,9 +75,9 @@ void hierchieal_clustering_thr(CompressedSets * C){
 
         #pragma omp parallel for shared(distance_matrix, min_distance, min_i, min_j)
         int i;
-        for (i = 0; i < C->size; i++) {
+        for (i = 0; i < C->number_of_sets; i++) {
             int j;
-            for (j = 0; j < C->size; j++) {
+            for (j = 0; j < C->number_of_sets; j++) {
                 # pragma omp critical
                 if (distance_matrix[i][j] < min_distance) {
                     min_distance = distance_matrix[i][j];
@@ -95,15 +93,15 @@ void hierchieal_clustering_thr(CompressedSets * C){
         }
 
         // 4. merge the two compressed set with the minimum distance
-        CompressedSet * newcset = merge_cset(compressedSets[min_i], C->compressedSets[min_j]);
+        CompressedSet * new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
 
         // 5. check the tightness of the new cluster
-        if (tightness(new_cset> T) {
+        if (tightness(new_cset) > T) {
             // 6. add the new cluster to the compressed sets
             add_cset_to_compressed_sets(C, new_cset);
             // 7. remove the two clusters from the compressed sets
-            remove_cluster_from_compressed_sets(C, C->compressedSets[min_i]);
-            remove_cluster_from_compressed_sets(C, C->compressedSets[min_j]);
+            remove_cluster_from_compressed_sets(C, C->sets[min_i]);
+            remove_cluster_from_compressed_sets(C, C->sets[min_j]);
             changes = true;
         } else {
             // 8. set the distance between the two clusters to infinity
@@ -111,7 +109,7 @@ void hierchieal_clustering_thr(CompressedSets * C){
             distance_matrix[min_j][min_i] = FLT_MAX;
             changes = false;
 
-            free(newcset);
+            free(new_cset);
         }
 
     }
@@ -120,7 +118,7 @@ void hierchieal_clustering_thr(CompressedSets * C){
  load_data(FILE *inputFile, Point *data_buffer, int offset, int rank, int round) {
     // TODO: implement the function
     // load DATA_BUFFER_SIZE points from the input file
-    if (stream_cursor == NULL){
+    if (inputFile == NULL){
         printf("Error: invalid stream cursor\n");
         return false;
     }
@@ -214,15 +212,16 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
 
     // 2. clusters that have a tightness measure above a certain threshold are added to the CompressedSet C 
     // using open mp
-    #pragma omp parallel for shared(k2_clusters, C)
-    for (int i = 0; i < k2; i++){
-       add_cluster_to_compressed_sets(C, k2_clusters[i]);
+    #pragma omp parallel for shared(k2_clusters, clusters)
+    int i;
+    for (i = 0; i < k2; i++){
+       add_cluster_to_compressed_sets(clusters, k2_clusters[i]);
     }
 
     free(k2_clusters);
 
     // 4. try aggregating compressed sets using statistics and hierchieal clustering
-    hierchieal_clustering_thr(C); //ALERT: not implemented yet
+    hierachical_clustering_thr(clusters); //ALERT: not implemented yet
 }
 
 bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, int * offset){
@@ -271,12 +270,12 @@ void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet 
     Point p;
     int offset;
 
-    #pragma omp parallel for private(p) shared(data_buffer, clusters, R) reduction(+:offset)
-    for (offset = 0; offset < size_of_data_buffer; offset++) {
-        if(read_point(data_buffer, &p, size_of_data_buffer, &offset)==0) {
+    #pragma omp parallel for private(p) shared(data_buffer, clusters, retainedSet) reduction(+:offset)
+    for (offset = 0; offset < size; offset++) {
+        if(read_point(data_buffer, &p, size, &offset)==0) {
             if (!primary_compression_criteria(clusters, p)) {
                 // this function is the same of the serial version, can be found in "bfr_structure.h"
-                add_point_to_retained_set(R, p);
+                add_point_to_retained_set(retainedSet, p);
             }
         }else {
             break;
@@ -285,15 +284,16 @@ void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet 
 
 
     // secondary compression criteria
-    secondary_compression_criteria(clusters, R, C);
+    secondary_compression_criteria(clusters, retainedSet, compressedSets);
 }
 
 void UpdateCentroids(Cluster *clusters) {
     // TODO: revise the function
     // update the centroids of the clusters
-    for (int i = 0; i < K; i++) {
-        for (int j = 0; j < DIMENSION; j++) {
-            clusters[i].centroid[j] = clusters[i].sum[j] / clusters[i].size;
+    int i, j;
+    for (i = 0; i < K; i++) {
+        for (j = 0; j < DIMENSION; j++) {
+            clusters[i].centroid.coords[j] = clusters[i].sum[j] / clusters[i].size;
         }
     }
 }
@@ -374,13 +374,13 @@ int main(int argc, char** argv) {
         // as reference to implement see take_k_centorids() in serial version
         clusters = initClustersWithCentroids(data_buffer, DATA_BUFFER_SIZE);
 
-        
-        for (int i = 1; i < size; i++) {
-            MPI_Send(clusters, 1, clusterType, i, 0, MPI_COMM_WORLD);
+        int i;        
+        for (i = 1; i < size; i++) {
+            MPI_Send(clusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD);
         }
     } else {
         // receive the clusters from the master
-        MPI_Recv(clusters, 1, clusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(clusters, 1, arrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     bool stop_criteria = false;
@@ -427,7 +427,7 @@ int main(int argc, char** argv) {
                         int d = 0;
                         for (; d < DIMENSION; d++) {
                             clusters[j].sum[d] += tempClusters[j].sum[d];
-                            clusters[j].sum_square[d] += tempClusters[j].sum_square[d];
+                            clusters[j].sum_squares[d] += tempClusters[j].sum_squares[d];
                         }
                     }
                 }
@@ -436,7 +436,7 @@ int main(int argc, char** argv) {
                 // update the clusters
                 UpdateCentroids(clusters);
                 // send the updated clusters to the other processes
-                int i = 1;
+                i = 1;
                 # pragma omp parallel for shared(clusters)
                 for (; i < size; i++) {
                     MPI_Send(clusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD);
@@ -463,12 +463,12 @@ int main(int argc, char** argv) {
                 free(tempClusters);
 
                 // erase the values of the clusters for each dimension in the array sum and sum_square
-                int j = 0;
+                j = 0;
                 for (; j < K; j++) {
                     int d = 0;
                     for (; d < DIMENSION; d++) {
                         clusters[j].sum[d] = 0;
-                        clusters[j].sum_square[d] = 0;
+                        clusters[j].sum_squares[d] = 0;
                     }
                 }
 
@@ -483,10 +483,11 @@ int main(int argc, char** argv) {
             if (rank == MASTER) {
                 if(DEBUG) {
                     printf("Round %d\n", round);
-                    for (int i = 0; i < K; i++) {
+                    int i, j;
+                    for (i = 0; i < K; i++) {
                         printf("Cluster %d: ", i);
-                        for (int j = 0; j < DIMENSION; j++) {
-                            printf("%f ", clusters[i].centroid[j]);
+                        for (j = 0; j < DIMENSION; j++) {
+                            printf("%f ", clusters[i].centroid.coords[j]);
                         }
                         printf("\n");
                     }
