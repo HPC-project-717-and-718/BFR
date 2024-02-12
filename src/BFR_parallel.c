@@ -10,17 +10,101 @@
 # define NUMBER_OF_THREADS 4
 # define DATA_BUFFER_SIZE 250 // equal to serial's MAX_SIZE_OF_BUFFER / NUMBER_OF_THREADS
 
-Cluster *initClustersWithCentroids(Point *data_buffer, int size) {
-    // TODO: implement the function, THIS IS JUST A NAIVE IMPLEMENTATION
-    
-    // take the first k points as centroids
-    Cluster *clusters = (Cluster *)malloc(K * sizeof(Cluster));
+
+float distance(Point p1, Point p2, int DIMENSION) {
+    // euclidean distance between two points
+    float sum = 0;
     int i;
-    for (i = 0; i < K; i++) {
-        clusters[i].centroid = data_buffer[i];
-        clusters[i].size = 0;
+    for (i = 0; i < DIMENSION; i++) {
+        sum += (p1.coords[i] - p2.coords[i]) * (p1.coords[i] - p2.coords[i]);
     }
+    return sqrt(sum);
+}
+
+Cluster *initClustersWithCentroids(Point *data_buffer, int size, int K, int DIMENSION) {
+    // the function has the same structure of the serial version but in multithread version and with some adjustment
+    
+    // create a set of clusters K
+    Cluster *clusters = (Cluster *)malloc(K * sizeof(Cluster));
+
+    // take a random point from the data buffer and make it the centroid of the cluster
+    int i, random_index;
+    srand(time(NULL));
+    random_index = rand() % size;
+
+    //set the index of the cluster
+    for(i = 0; i < K; i++) {
+        clusters[i].index = i;
+    }
+
+    Point centroids[K];
+
+    centroids[0] = data_buffer[random_index];
+
+    int j;
+    # pragma omp parallel for shared(clusters, data_buffer, random_index)
+    for (j = 0; j < DIMENSION; j++) {
+        clusters[0]->sum[j] = centroids[0].coords[j];
+        clusters[0]->sum_square[j] = centroids[0].coords[j] * centroids[0].coords[j];
+    }
+
+    // update the centroids of the clusters
+    UpdateCentroidsMultithr(clusters, 0, K, DIMENSION);
+    
+
+    // choose the other K-1 centroids seeking the farthest point from the previous centroids
+    for (i = 1; i < K; i++) {
+        int farthest_point_index = 0;
+        float farthest_distance = 0;
+        int j;
+        // multithread the for loop to find the farthest point from the previous centroids
+        # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index, farthest_distance)
+        for (j = 0; j < size; j++) {
+            float current_distance = 0;
+            int k;
+            # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index, farthest_distance, current_distance)
+            for (k = 0; k < i; k++) {
+                current_distance += distance(centroids[k], *data_buffer[j], DIMENSION);
+            }
+            // critical section to update the farthest point
+            # pragma omp critical
+            if (current_distance > farthest_distance) {
+                farthest_distance = current_distance;
+                farthest_point_index = j;
+            }
+        }
+
+        // set the farthest point as the centroid of the cluster
+        centroids[i] = data_buffer[farthest_point_index];
+
+        int j;
+        // multithread the for loop to update the sum and sum_square of the cluster
+        # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index)
+        for (j = 0; j < DIMENSION; j++) {
+            clusters[i]->sum[j] = data_buffer[farthest_point_index]->coords[j];
+            clusters[i]->sum_square[j] = data_buffer[farthest_point_index]->coords[j] * data_buffer[farthest_point_index]->coords[j];
+        }
+
+        // update the centroids of the clusters in multithreaded version
+        UpdateCentroidsMultithr(clusters, i, K, DIMENSION);
+    }
+
     return clusters;
+}
+
+bool UpdateCentroidsMultithr(Cluster *clusters, int index, int K, int DIMENSION) {
+    bool flag_error = false;
+
+    // the function has the same structure of the serial version but in multithreaded version
+    int i, j;
+    # pragma omp parallel for shared(clusters, index, K, DIMENSION)
+    for (i = 0; i < K; i++) {
+        for (j = 0; j < DIMENSION; j++) {
+            clusters[index].centroid.coords[j] = clusters[i].sum[j] / clusters[i].size;
+        }
+    }
+
+    return flag_error;
 }
 
 CompressedSet *merge_cset(CompressedSet *c1, CompressedSet *c2) {
