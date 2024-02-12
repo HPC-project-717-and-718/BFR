@@ -31,8 +31,8 @@ CompressedSet *merge_cset(CompressedSet *c1, CompressedSet *c2) {
     // merge the two compressed sets 
     new_cset -> number_of_points = c1 -> number_of_points + c2 -> number_of_points;
     
-    # pragma omp parallel for shared(new_cset, c1, c2)
     int i;
+    # pragma omp parallel for shared(new_cset, c1, c2)
     for ( i = 0; i < M; i++){
         new_cset -> sum[i] = c1 -> sum[i] + c2 -> sum[i];
         new_cset -> sum_square[i] = c1 -> sum_square[i] + c2 -> sum_square[i];
@@ -57,10 +57,9 @@ void hierachical_clustering_thr(CompressedSets * C){
     while(!stop_criteria){
         // 1. compute the distance matrix
         if (changes) {
-            #pragma omp parallel for shared(distance_matrix, C)
-            int i;
+            int i, j;
+            # pragma omp parallel for shared(distance_matrix, C) private(j)
             for (i = 0; i < C->number_of_sets; i++) {
-                int j;
                 for (j = 0; j < C->number_of_sets; j++) {
                     // TODO: implement distance function
                     distance_matrix[i][j] = distance((Pointer) & (C->sets[i]), (Pointer) & (C->sets[j]));
@@ -73,10 +72,9 @@ void hierachical_clustering_thr(CompressedSets * C){
         float min_distance = FLT_MAX;
         int min_i, min_j;
 
-        #pragma omp parallel for shared(distance_matrix, min_distance, min_i, min_j)
-        int i;
+        int i, j;
+        # pragma omp parallel for shared(distance_matrix, min_distance, min_i, min_j) private(j)
         for (i = 0; i < C->number_of_sets; i++) {
-            int j;
             for (j = 0; j < C->number_of_sets; j++) {
                 # pragma omp critical
                 if (distance_matrix[i][j] < min_distance) {
@@ -212,8 +210,8 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
 
     // 2. clusters that have a tightness measure above a certain threshold are added to the CompressedSet C 
     // using open mp
-    #pragma omp parallel for shared(k2_clusters, clusters)
     int i;
+    # pragma omp parallel for shared(k2_clusters, clusters)
     for (i = 0; i < k2; i++){
        add_cluster_to_compressed_sets(clusters, k2_clusters[i]);
     }
@@ -270,7 +268,7 @@ void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet 
     Point p;
     int offset;
 
-    #pragma omp parallel for private(p) shared(data_buffer, clusters, retainedSet) reduction(+:offset)
+    # pragma omp parallel for private(p) shared(data_buffer, clusters, retainedSet) //reduction(+:offset)
     for (offset = 0; offset < size; offset++) {
         if(read_point(data_buffer, &p, size, &offset)==0) {
             if (!primary_compression_criteria(clusters, p)) {
@@ -278,7 +276,8 @@ void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet 
                 add_point_to_retained_set(retainedSet, p);
             }
         }else {
-            break;
+            // break;
+            continue;
         }
     }
 
@@ -418,14 +417,13 @@ int main(int argc, char** argv) {
                     MPI_Recv(tempClusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     // update the clusters with the clusters from the other processes
                     // TODO: is important to acknowledge that after the first round the values of the clusters for each dimension should be erased, if not the clusters will be updated readding also the values of the previous rounds but only the master will have the correct values
-                    int j = 0;
+                    int j, d;
 
-                    # pragma omp parallel for shared(tempClusters, clusters)
-                    for (; j < K; j++) {
+                    # pragma omp parallel for shared(tempClusters, clusters) private(d)
+                    for (j = 0; j < K; j++) {
                         // TODO: NAIVE IMPLEMENTATION revise
                         clusters[j].size += tempClusters[j].size;
-                        int d = 0;
-                        for (; d < DIMENSION; d++) {
+                        for (d = 0; d < DIMENSION; d++) {
                             clusters[j].sum[d] += tempClusters[j].sum[d];
                             clusters[j].sum_squares[d] += tempClusters[j].sum_squares[d];
                         }
@@ -436,9 +434,9 @@ int main(int argc, char** argv) {
                 // update the clusters
                 UpdateCentroids(clusters);
                 // send the updated clusters to the other processes
-                i = 1;
+                
                 # pragma omp parallel for shared(clusters)
-                for (; i < size; i++) {
+                for (i = 1; i < size; i++) {
                     MPI_Send(clusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD);
                 }
             } else {
