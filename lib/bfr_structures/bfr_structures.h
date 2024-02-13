@@ -1,14 +1,9 @@
 #ifndef BFR_STRUCTURES
 #define BFR_STRUCTURES
 
+#include "../kmeans/kmeans.h"
 
-#include "../definitions.h"
 
-
-typedef struct {
-    double coords[M];
-    int cluster;
-} Point;
 
 typedef struct {
     Point centroid;

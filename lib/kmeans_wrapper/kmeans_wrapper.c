@@ -126,7 +126,7 @@ static void centroid(const Pointer * objs, const int * clusters, size_t num_objs
 }
 
 
-kmeans_config init_kmeans_config(int k, RetainedSet * R){
+kmeans_config init_kmeans_config(int k, RetainedSet * R, bool parallel, int rank, int size){
     kmeans_config config;
 
     int i, number_of_points = (*R).number_of_points;
@@ -145,6 +145,9 @@ kmeans_config init_kmeans_config(int k, RetainedSet * R){
 	config.centers = calloc(config.k, sizeof(Pointer));
 	config.clusters = calloc(config.num_objs, sizeof(int));
 
+    config.parallel = parallel;
+    config.rank = rank;
+    config.size = size;
 
     if(DEBUG) printf("              Copying Retained set.\n");
     /* Add to kmeans' config the RetainedSet's points */
@@ -254,7 +257,7 @@ Cluster * cluster_retained_set(RetainedSet * R, int * k){
         return miniclusters;
     }
 
-    kmeans_config config = init_kmeans_config((*k), R);
+    kmeans_config config = init_kmeans_config((*k), R, false, 0, 0);
     if(DEBUG) printf("          Executing standard kmeans.\n");
 	kmeans_result result = kmeans(&config);
 

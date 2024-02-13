@@ -73,6 +73,9 @@ The folders are organized as the following:
 
 ## How to use
 
-Compile with:
+Compile the serial source code with:
 ```gcc src/BFR_serial.c lib/kmeans_wrapper/kmeans_wrapper.c lib/kmeans/kmeans.c lib/bfr_structures/bfr_structures.c  -o src/bfr_serial -lm```
+
+Compile the parallel source code with:
+```mpicc src/BFR_parallel.c lib/bfr_structures/bfr_structures.c lib/kmeans_wrapper/kmeans_wrapper.c lib/kmeans/kmeans.c -o src/bfr_parallel -lm -fopenmp```
 

@@ -7,18 +7,8 @@
 *
 *------------------------------------------------------------------------*/
 
-#include <assert.h>
-#include <float.h>
-#include <math.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 
 #include "kmeans.h"
-
-#ifdef KMEANS_THREADED
-#include <pthread.h>
-#endif
 
 static void
 update_r(kmeans_config *config)
@@ -82,164 +72,310 @@ update_means(kmeans_config *config)
 
 #ifdef KMEANS_THREADED
 
-static void * update_r_threaded_main(void *args)
+// static void * update_r_threaded_main(void *args)
+// {
+// 	kmeans_config *config = (kmeans_config*)args;
+// 	update_r(config);
+// 	pthread_exit(args);
+// }
+
+// static void update_r_threaded(kmeans_config *config)
+// {
+// 	/* Computational complexity is function of objs/clusters */
+// 	/* We only spin up threading infra if we need more than one core */
+// 	/* running. We keep the threshold high so the overhead of */
+// 	/* thread management is small compared to thread compute time */
+// 	int num_threads = config->num_objs * config->k / KMEANS_THR_THRESHOLD;
+
+// 	/* Can't run more threads than the maximum */
+// 	num_threads = (num_threads > KMEANS_THR_MAX ? KMEANS_THR_MAX : num_threads);
+
+// 	/* If the problem size is small, don't bother w/ threading */
+// 	if (num_threads < 1)
+// 	{
+// 		update_r(config);
+// 	}
+// 	else
+// 	{
+// 		pthread_t thread[KMEANS_THR_MAX];
+// 		pthread_attr_t thread_attr;
+// 		kmeans_config thread_config[KMEANS_THR_MAX];
+// 		int obs_per_thread = config->num_objs / num_threads;
+// 		int i, rc;
+
+// 		for (i = 0; i < num_threads; i++)
+// 		{
+// 			/*
+// 			* Each thread gets a copy of the config, but with the list pointers
+// 			* offest to the start of the batch the thread is responsible for, and the
+// 			* object count number adjusted similarly.
+// 			*/
+// 			memcpy(&(thread_config[i]), config, sizeof(kmeans_config));
+// 			thread_config[i].objs += i*obs_per_thread;
+// 			thread_config[i].clusters += i*obs_per_thread;
+// 			thread_config[i].num_objs = obs_per_thread;
+// 			if (i == num_threads-1)
+// 			{
+// 				thread_config[i].num_objs += config->num_objs - num_threads*obs_per_thread;
+// 			}
+
+// 			/* Initialize and set thread detached attribute */
+// 			pthread_attr_init(&thread_attr);
+// 			pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
+
+// 			/* Now we just run the thread, on its subset of the data */
+// 			rc = pthread_create(&thread[i], &thread_attr, update_r_threaded_main, (void *) &thread_config[i]);
+// 			if (rc)
+// 			{
+// 				printf("ERROR: return code from pthread_create() is %d\n", rc);
+// 				exit(-1);
+// 			}
+// 		}
+
+// 		/* Free attribute and wait for the other threads */
+// 		pthread_attr_destroy(&thread_attr);
+
+// 		/* Wait for all calculations to complete */
+// 		for (i = 0; i < num_threads; i++)
+// 		{
+// 		    void *status;
+// 			rc = pthread_join(thread[i], &status);
+// 			if (rc)
+// 			{
+// 				printf("ERROR: return code from pthread_join() is %d\n", rc);
+// 				exit(-1);
+// 			}
+// 		}
+// 	}
+// }
+
+static void * update_r_parallel_main(void *args)
 {
 	kmeans_config *config = (kmeans_config*)args;
 	update_r(config);
-	pthread_exit(args);
 }
 
-static void update_r_threaded(kmeans_config *config)
+static void update_r_parallel(kmeans_config *config)
 {
-	/* Computational complexity is function of objs/clusters */
-	/* We only spin up threading infra if we need more than one core */
-	/* running. We keep the threshold high so the overhead of */
-	/* thread management is small compared to thread compute time */
-	int num_threads = config->num_objs * config->k / KMEANS_THR_THRESHOLD;
+	int obs_per_node = config->num_objs / config->size;
 
-	/* Can't run more threads than the maximum */
-	num_threads = (num_threads > KMEANS_THR_MAX ? KMEANS_THR_MAX : num_threads);
+	/* For each node, create a config copy with the objects, clusters and num_objs offset correctly*/
+	kmeans_config node_config;
 
-	/* If the problem size is small, don't bother w/ threading */
-	if (num_threads < 1)
+	memcpy(&(node_config), config, sizeof(kmeans_config));
+	node_config.objs += config->rank*obs_per_node;
+	node_config.clusters += config->rank*obs_per_node;
+	node_config.num_objs = obs_per_node;
+	if (config->rank == config->size-1)
 	{
-		update_r(config);
+		node_config.num_objs += config->num_objs - config->size*obs_per_node;
 	}
-	else
-	{
-		pthread_t thread[KMEANS_THR_MAX];
-		pthread_attr_t thread_attr;
-		kmeans_config thread_config[KMEANS_THR_MAX];
-		int obs_per_thread = config->num_objs / num_threads;
-		int i, rc;
 
-		for (i = 0; i < num_threads; i++)
-		{
-			/*
-			* Each thread gets a copy of the config, but with the list pointers
-			* offest to the start of the batch the thread is responsible for, and the
-			* object count number adjusted similarly.
-			*/
-			memcpy(&(thread_config[i]), config, sizeof(kmeans_config));
-			thread_config[i].objs += i*obs_per_thread;
-			thread_config[i].clusters += i*obs_per_thread;
-			thread_config[i].num_objs = obs_per_thread;
-			if (i == num_threads-1)
-			{
-				thread_config[i].num_objs += config->num_objs - num_threads*obs_per_thread;
-			}
+	/* Run the node, on its subset of the data */
+	update_r_parallel_main((void *) &node_config);
 
-			/* Initialize and set thread detached attribute */
-			pthread_attr_init(&thread_attr);
-			pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
+	// Determine displacement and count for each process
+    int* displs = (int*)malloc(sizeof(int) * config->size);
+    int* rcounts = (int*)malloc(sizeof(int) * config->size);
+    int total_elements = 0, i;
+	for (i = 0; i < config->size; ++i) {
+        displs[i] = total_elements;
+        rcounts[i] = node_config.num_objs;
+        total_elements += node_config.num_objs;
+    }
 
-			/* Now we just run the thread, on its subset of the data */
-			rc = pthread_create(&thread[i], &thread_attr, update_r_threaded_main, (void *) &thread_config[i]);
-			if (rc)
-			{
-				printf("ERROR: return code from pthread_create() is %d\n", rc);
-				exit(-1);
-			}
-		}
-
-		/* Free attribute and wait for the other threads */
-		pthread_attr_destroy(&thread_attr);
-
-		/* Wait for all calculations to complete */
-		for (i = 0; i < num_threads; i++)
-		{
-		    void *status;
-			rc = pthread_join(thread[i], &status);
-			if (rc)
-			{
-				printf("ERROR: return code from pthread_join() is %d\n", rc);
-				exit(-1);
-			}
-		}
-	}
+    MPI_Allgatherv(node_config.clusters, rcounts[config->rank], MPI_INT, config->clusters, rcounts, displs, MPI_INT, MPI_COMM_WORLD);	
 }
 
-int update_means_k;
-pthread_mutex_t update_means_k_mutex;
+// int update_means_k;
+// pthread_mutex_t update_means_k_mutex;
 
-static void *
-update_means_threaded_main(void *arg)
-{
-	kmeans_config *config = (kmeans_config*)arg;
-	int i = 0;
+// static void *
+// update_means_threaded_main(void *arg)
+// {
+// 	kmeans_config *config = (kmeans_config*)arg;
+// 	int i = 0;
 
-	do
-	{
-		pthread_mutex_lock (&update_means_k_mutex);
-		i = update_means_k;
-		update_means_k++;
-		pthread_mutex_unlock (&update_means_k_mutex);
+// 	do
+// 	{
+// 		pthread_mutex_lock (&update_means_k_mutex);
+// 		i = update_means_k;
+// 		update_means_k++;
+// 		pthread_mutex_unlock (&update_means_k_mutex);
 
-		if (i < config->k)
-			(config->centroid_method)(config->objs, config->clusters, config->num_objs, i, config->centers[i]);
-	}
-	while (i < config->k);
+// 		if (i < config->k)
+// 			(config->centroid_method)(config->objs, config->clusters, config->num_objs, i, config->centers[i]);
+// 	}
+// 	while (i < config->k);
 
-	pthread_exit(arg);
-}
+// 	pthread_exit(arg);
+// }
+
+// static void
+// update_means_threaded(kmeans_config *config)
+// {
+// 	/* We only spin up threading infra if we need more than one core */
+// 	/* running. We keep the threshold high so the overhead of */
+// 	/* thread management is small compared to thread compute time */
+// 	int num_threads = config->num_objs / KMEANS_THR_THRESHOLD;
+
+// 	/* Can't run more threads than the maximum */
+// 	num_threads = (num_threads > KMEANS_THR_MAX ? KMEANS_THR_MAX : num_threads);
+
+// 	/* If the problem size is small, don't bother w/ threading */
+// 	if (num_threads < 1)
+// 	{
+// 		update_means(config);
+// 	}
+// 	else
+// 	{
+// 		/* Mutex protected counter to drive threads */
+// 		pthread_t thread[KMEANS_THR_MAX];
+// 		pthread_attr_t thread_attr;
+// 		int i, rc;
+
+// 		pthread_mutex_init(&update_means_k_mutex, NULL);
+// 		update_means_k = 0;
+
+// 		pthread_attr_init(&thread_attr);
+// 		pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
+
+// 		/* Create threads to perform computation  */
+// 		for (i = 0; i < num_threads; i++)
+// 		{
+
+// 			/* Now we just run the thread, on its subset of the data */
+// 			rc = pthread_create(&thread[i], &thread_attr, update_means_threaded_main, (void *) config);
+// 			if (rc)
+// 			{
+// 				printf("ERROR: return code from pthread_create() is %d\n", rc);
+// 				exit(-1);
+// 			}
+// 		}
+
+// 		pthread_attr_destroy(&thread_attr);
+
+// 		/* Watch until completion  */
+// 		for (i = 0; i < num_threads; i++)
+// 		{
+// 		    void *status;
+// 			rc = pthread_join(thread[i], &status);
+// 			if (rc)
+// 			{
+// 				printf("ERROR: return code from pthread_join() is %d\n", rc);
+// 				exit(-1);
+// 			}
+// 		}
+
+// 		pthread_mutex_destroy(&update_means_k_mutex);
+// 	}
+// }
 
 static void
-update_means_threaded(kmeans_config *config)
+update_means_parallel(kmeans_config *config)
 {
-	/* We only spin up threading infra if we need more than one core */
-	/* running. We keep the threshold high so the overhead of */
-	/* thread management is small compared to thread compute time */
-	int num_threads = config->num_objs / KMEANS_THR_THRESHOLD;
+	/* What we want to do here is assign each node a number of clusters. Each will update its center and the results will be shared to all nodes. */
+	if(config->k <= config->size){
 
-	/* Can't run more threads than the maximum */
-	num_threads = (num_threads > KMEANS_THR_MAX ? KMEANS_THR_MAX : num_threads);
+		if(config->rank < config->k){
+			/* Assign one cluster to each node until no cluster can be assigned */
+			int clusters_per_node = 1;
+			int clusters_per_node_all = clusters_per_node;
 
-	/* If the problem size is small, don't bother w/ threading */
-	if (num_threads < 1)
-	{
-		update_means(config);
+			/* For each node, recompute mean and send new centroid coordinates to MASTER */
+			int offset;
+			offset = config->rank;
+			(config->centroid_method)(config->objs, config->clusters, config->num_objs, offset, config->centers[offset]);
+			
+			Point* pointArray = (Point*)config->centers;
+	
+			double* coords_ptr = &pointArray[offset].coords[0];
+			if(config->rank != MASTER) MPI_Send(coords_ptr, M, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD);
+		}
+
+		/* MASTER has to receive each centroid coordinates and update them accordingly */
+		if(config->rank == MASTER){
+			double* temp_coords_ptr = (double*)malloc(M*sizeof(double));
+			/* Receive new centers */
+			int i, offset;
+			for(i = 1; i < config->k; i++){
+				offset = config->rank;
+				MPI_Recv(temp_coords_ptr, M, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+				
+				Point* pointArray = (Point*)config->centers;
+				// Copy received values to the coords array
+				int k;
+				for (k = 0; k < M; k++) {
+					pointArray[offset].coords[k] = temp_coords_ptr[k];
+    			}
+			}
+			free(temp_coords_ptr);
+		}
+
 	}
-	else
-	{
-		/* Mutex protected counter to drive threads */
-		pthread_t thread[KMEANS_THR_MAX];
-		pthread_attr_t thread_attr;
-		int i, rc;
-
-		pthread_mutex_init(&update_means_k_mutex, NULL);
-		update_means_k = 0;
-
-		pthread_attr_init(&thread_attr);
-		pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
-
-		/* Create threads to perform computation  */
-		for (i = 0; i < num_threads; i++)
+	else{
+		/* Assign a (possibly) equal number of clusters to each node*/
+		int clusters_per_node = config->k / config->size;
+		int clusters_per_node_all = clusters_per_node;
+		if (config->rank == config->size-1)
 		{
-
-			/* Now we just run the thread, on its subset of the data */
-			rc = pthread_create(&thread[i], &thread_attr, update_means_threaded_main, (void *) config);
-			if (rc)
-			{
-				printf("ERROR: return code from pthread_create() is %d\n", rc);
-				exit(-1);
-			}
+			/* Last node gets the remainder */
+			clusters_per_node += config->k - config->size*clusters_per_node;
 		}
 
-		pthread_attr_destroy(&thread_attr);
-
-		/* Watch until completion  */
-		for (i = 0; i < num_threads; i++)
-		{
-		    void *status;
-			rc = pthread_join(thread[i], &status);
-			if (rc)
-			{
-				printf("ERROR: return code from pthread_join() is %d\n", rc);
-				exit(-1);
-			}
+		/* For each node, recompute mean and send new centroid coordinates to MASTER */
+		int i, offset;
+		for(i = 0; i < clusters_per_node; i++){
+			offset = i + config->rank * clusters_per_node_all;
+			(config->centroid_method)(config->objs, config->clusters, config->num_objs, offset, config->centers[offset]);
+            
+			Point* pointArray = (Point*)config->centers;
+    
+			double* coords_ptr = &pointArray[offset].coords[0];
+			if(config->rank != MASTER) MPI_Send(coords_ptr, M, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD);
 		}
 
-		pthread_mutex_destroy(&update_means_k_mutex);
+		/* MASTER has to receive each centroid coordinates and update them accordingly */
+		if(config->rank == MASTER){
+			double* temp_coords_ptr = (double*)malloc(M*sizeof(double));
+			/* Receive new centers */
+			int j;
+			for(i = 1; i < config->size; i++){
+				clusters_per_node = config->k / config->size;
+				clusters_per_node_all = clusters_per_node;
+				if (config->rank == config->size-1){
+					clusters_per_node += config->k - config->size*clusters_per_node;
+				}
+
+				for(j = 0; j < clusters_per_node; j++){
+					offset = j + config->rank * clusters_per_node_all;
+					MPI_Recv(temp_coords_ptr, M, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+					
+					Point* pointArray = (Point*)config->centers;
+
+					// Copy received values to the coords array
+					int k;
+					for (k = 0; k < M; k++) {
+						pointArray[offset].coords[k] = temp_coords_ptr[k];
+    				}
+				}
+			}
+			free(temp_coords_ptr);
+		}
+	}
+
+	int i, offset;
+	for (i = 0; i < config->k; i++){
+		Point* pointArray = (Point*)config->centers;
+		double* coords_ptr = &pointArray[i].coords[0];
+		MPI_Bcast(coords_ptr, M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+		if(config->rank != MASTER){
+			/* Update centroid coordinates */
+			int k;
+			for (k = 0; k < M; k++) {
+				pointArray[offset].coords[k] = coords_ptr[k];
+    		}
+		}
 	}
 }
 
@@ -261,6 +397,9 @@ kmeans(kmeans_config *config)
 	assert(config->k);
 	assert(config->clusters);
 	assert(config->k <= config->num_objs);
+	assert(config->parallel);
+	assert(config->rank);
+	assert(config->size);
 
 	/* Zero out cluster numbers, just in case user forgets */
 	memset(config->clusters, 0, clusters_sz);
@@ -273,20 +412,24 @@ kmeans(kmeans_config *config)
 	 * Previous cluster state array. At this time, r doesn't mean anything
 	 * but it's ok
 	 */
-	clusters_last = kmeans_malloc(clusters_sz);
+	if (config->rank == MASTER){
+		clusters_last = kmeans_malloc(clusters_sz);
+	}
 
 	while (1)
 	{
 		/* Store the previous state of the clustering */
 		memcpy(clusters_last, config->clusters, clusters_sz);
 
-#ifdef KMEANS_THREADED
-		update_r_threaded(config);
-		update_means_threaded(config);
-#else
-		update_r(config);
-		update_means(config);
-#endif
+		if(config->parallel){
+			/* At this point, all nodes have the same config. Have master coordinate the clustering, then broadcast the results. */
+			update_r_parallel(config);
+			update_means_parallel(config);
+		}
+		else{
+			update_r(config);
+			update_means(config);
+		}
 		/*
 		 * if all the cluster numbers are unchanged since last time,
 		 * we are at a stable solution, so we can stop here

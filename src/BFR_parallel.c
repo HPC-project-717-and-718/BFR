@@ -3,29 +3,28 @@
 
 // TODO: there will some problem here
 
-# define MASTER 0
-# define DEBUG 1
-# define K 10
-# define DIMENSION 2
-# define NUMBER_OF_THREADS 4
-# define DATA_BUFFER_SIZE 250 // equal to serial's MAX_SIZE_OF_BUFFER / NUMBER_OF_THREADS
 
 
-float distance(Point p1, Point p2, int DIMENSION) {
-    // euclidean distance between two points
-    float sum = 0;
-    int i;
-    for (i = 0; i < DIMENSION; i++) {
-        sum += (p1.coords[i] - p2.coords[i]) * (p1.coords[i] - p2.coords[i]);
+bool UpdateCentroidsMultithr(Cluster *clusters, int index, int number_of_clusters, int dimension) {
+    bool flag_error = false;
+
+    // the function has the same structure of the serial version but in multithreaded version
+    int i, j;
+    # pragma omp parallel for shared(clusters, index, number_of_clusters, dimension)
+    for (i = 0; i < number_of_clusters; i++) {
+        for (j = 0; j < dimension; j++) {
+            clusters[index].centroid.coords[j] = clusters[i].sum[j] / clusters[i].size;
+        }
     }
-    return sqrt(sum);
+
+    return flag_error;
 }
 
-Cluster *initClustersWithCentroids(Point *data_buffer, int size, int K, int DIMENSION) {
+Cluster *initClustersWithCentroids(Point *data_buffer, int size, int number_of_clusters, int dimension) {
     // the function has the same structure of the serial version but in multithread version and with some adjustment
     
-    // create a set of clusters K
-    Cluster *clusters = (Cluster *)malloc(K * sizeof(Cluster));
+    // create a set of clusters number_of_clusters
+    Cluster *clusters = (Cluster *)malloc(number_of_clusters * sizeof(Cluster));
 
     // take a random point from the data buffer and make it the centroid of the cluster
     int i, random_index;
@@ -33,27 +32,27 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int K, int DIME
     random_index = rand() % size;
 
     //set the index of the cluster
-    for(i = 0; i < K; i++) {
+    for(i = 0; i < number_of_clusters; i++) {
         clusters[i].index = i;
     }
 
-    Point centroids[K];
+    Point centroids[number_of_clusters];
 
     centroids[0] = data_buffer[random_index];
 
     int j;
     # pragma omp parallel for shared(clusters, data_buffer, random_index)
-    for (j = 0; j < DIMENSION; j++) {
-        clusters[0]->sum[j] = centroids[0].coords[j];
-        clusters[0]->sum_square[j] = centroids[0].coords[j] * centroids[0].coords[j];
+    for (j = 0; j < dimension; j++) {
+        clusters[0].sum[j] = centroids[0].coords[j];
+        clusters[0].sum_squares[j] = centroids[0].coords[j] * centroids[0].coords[j];
     }
 
     // update the centroids of the clusters
-    UpdateCentroidsMultithr(clusters, 0, K, DIMENSION);
+    UpdateCentroidsMultithr(clusters, 0, number_of_clusters, dimension);
     
 
-    // choose the other K-1 centroids seeking the farthest point from the previous centroids
-    for (i = 1; i < K; i++) {
+    // choose the other number_of_clusters-1 centroids seeking the farthest point from the previous centroids
+    for (i = 1; i < number_of_clusters; i++) {
         int farthest_point_index = 0;
         float farthest_distance = 0;
         int j;
@@ -64,7 +63,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int K, int DIME
             int k;
             # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index, farthest_distance, current_distance)
             for (k = 0; k < i; k++) {
-                current_distance += distance(centroids[k], *data_buffer[j], DIMENSION);
+                current_distance += distance((Pointer) & centroids[k], (Pointer) & data_buffer[j]);
             }
             // critical section to update the farthest point
             # pragma omp critical
@@ -77,34 +76,18 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int K, int DIME
         // set the farthest point as the centroid of the cluster
         centroids[i] = data_buffer[farthest_point_index];
 
-        int j;
         // multithread the for loop to update the sum and sum_square of the cluster
         # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index)
-        for (j = 0; j < DIMENSION; j++) {
-            clusters[i]->sum[j] = data_buffer[farthest_point_index]->coords[j];
-            clusters[i]->sum_square[j] = data_buffer[farthest_point_index]->coords[j] * data_buffer[farthest_point_index]->coords[j];
+        for (j = 0; j < dimension; j++) {
+            clusters[i].sum[j] = data_buffer[farthest_point_index].coords[j];
+            clusters[i].sum_squares[j] = data_buffer[farthest_point_index].coords[j] * data_buffer[farthest_point_index].coords[j];
         }
 
         // update the centroids of the clusters in multithreaded version
-        UpdateCentroidsMultithr(clusters, i, K, DIMENSION);
+        UpdateCentroidsMultithr(clusters, i, number_of_clusters, dimension);
     }
 
     return clusters;
-}
-
-bool UpdateCentroidsMultithr(Cluster *clusters, int index, int K, int DIMENSION) {
-    bool flag_error = false;
-
-    // the function has the same structure of the serial version but in multithreaded version
-    int i, j;
-    # pragma omp parallel for shared(clusters, index, K, DIMENSION)
-    for (i = 0; i < K; i++) {
-        for (j = 0; j < DIMENSION; j++) {
-            clusters[index].centroid.coords[j] = clusters[i].sum[j] / clusters[i].size;
-        }
-    }
-
-    return flag_error;
 }
 
 CompressedSet *merge_cset(CompressedSet *c1, CompressedSet *c2) {
@@ -123,6 +106,10 @@ CompressedSet *merge_cset(CompressedSet *c1, CompressedSet *c2) {
     }
 
     return new_cset;
+}
+
+void add_cset_to_compressed_sets(CompressedSets *compressedSets, CompressedSet *c) {
+    // TODO: copy the function from the serial version trying to multithread it
 }
 
 void hierachical_clustering_thr(CompressedSets * C){
@@ -206,11 +193,7 @@ void hierachical_clustering_thr(CompressedSets * C){
     }
 }
 
-void add_cluster_to_compressed_sets(CompressedSet *compressedSets, Cluster c) {
-    // TODO: copy the function from the serial version trying to multithread it
-}
-
-void add_cset_to_compressed_sets(CompressedSet *compressedSets, CompressedSet c) {
+void add_cluster_to_compressed_sets(CompressedSets *compressedSets, Cluster *c) {
     // TODO: copy the function from the serial version trying to multithread it
 }
 
@@ -264,7 +247,97 @@ bool primary_compression_criteria(Cluster *clusters, Point p) {
     return false;
 }
 
-void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSet *compressedSets) {
+Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size){
+
+    if(DEBUG && rank == MASTER) printf("          Initializing standard kmeans data.\n");
+    Cluster * miniclusters = init_cluster((*k));
+
+    // TODO: discuss a correct limit for not running standard kmeans
+    // as of now, do not run kmeans if the number of points is < k
+    // we may want to run kmeans when we have more than k*constant number of points
+    if((*R).number_of_points < (*k)){
+        if(DEBUG && rank == MASTER) printf("          Retained set has less points (%d) than clusters(%d). Returning empty miniclusters.\n", (*R).number_of_points, (*k));
+        return miniclusters;
+    }
+
+    kmeans_config config = init_kmeans_config((*k), R, true, rank, size);
+    if(DEBUG && rank == MASTER) printf("          Executing standard kmeans.\n");
+
+    if(rank == MASTER){
+        kmeans_result result = kmeans(&config);
+
+        if(DEBUG) printf("          Iteration count: %d\n", config.total_iterations);
+        if(DEBUG) printf("          Transferring kmeans cluster data to miniclusters.\n");
+        
+        int i;
+        for (i = 0; i < config.num_objs; i++){
+            Point *pt = (Point *)(config.objs[i]);
+
+            update_cluster(&miniclusters[config.clusters[i]], *pt);
+        }
+
+        // create new correct retained set with only the points left alone in their clusters
+        RetainedSet new_R = init_retained_set();
+        int * tightness_flag;
+        tightness_flag = calloc((*k), sizeof(int));
+        for (i = 0; i < config.num_objs; i++){
+            Point *pt = (Point *)(config.objs[i]);
+            // TODO: use a different measure to determine a minicluster's tightness
+            int index = config.clusters[i];
+
+            if (!tightness_evaluation_cluster(miniclusters[index], tightness_flag, index)){
+                add_point_to_retained_set(&new_R, *pt);
+            }
+            else {
+                if(DEBUG) printf("Point not added to retained set: %g\t%g\t%d\n", pt->coords[0], pt->coords[1], config.clusters[i]);
+            }
+        }
+
+        if(DEBUG){
+            printf("          Old retained set:\n");
+            print_retainedset(*R);
+        }
+
+        // TODO: discuss whether this is correct or not
+        // free old retained set and replace with new one
+        free((*R).points);
+        (*R).points = new_R.points;
+        (*R).number_of_points = new_R.number_of_points;
+
+        if(DEBUG){
+            printf("          New retained set:\n");
+            print_retainedset(*R);
+        }
+
+        if(DEBUG) printf("          Freeing previously allocated data for standard kmeans.\n");
+
+        //update miniclusters, retain only with tightness_flag = 2
+        (*k) = update_miniclusters(&miniclusters, tightness_flag, (*k));
+
+        // free the kmeans' config data
+        free(config.objs);
+        free(config.centers);
+        free(config.clusters);
+
+        // free tightness flag
+        free(tightness_flag);
+
+        // update miniclusters' centroids
+        update_centroids(&miniclusters, (*k));
+
+    }
+    else{
+        kmeans(&config);
+        free(config.objs);
+        free(config.centers);
+        free(config.clusters);
+    }
+
+    // If MASTER, will be correctly filled. If not, it's an empty array
+    return miniclusters;
+}
+
+void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *compressedSets, int rank, int size) {
     // TODO: implement the function
     /*
     * Description:
@@ -289,21 +362,36 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
 
     // 1. cluster retained set R with classical K-Means, creating k2 clusters, also keep in R the outlayers
     // TODO: implement the function K-Means with open mp
-    int k2;
-    Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, k2); //ALERT: not implemented yet
+    int k2 = K;
+    Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, &k2, rank, size); 
 
     // 2. clusters that have a tightness measure above a certain threshold are added to the CompressedSet C 
     // using open mp
     int i;
     # pragma omp parallel for shared(k2_clusters, clusters)
     for (i = 0; i < k2; i++){
-       add_cluster_to_compressed_sets(clusters, k2_clusters[i]);
+    //    add_cluster_to_compressed_sets(clusters, k2_clusters[i]);
     }
 
     free(k2_clusters);
 
-    // 4. try aggregating compressed sets using statistics and hierchieal clustering
-    hierachical_clustering_thr(clusters); //ALERT: not implemented yet
+    // 4. try aggregating compressed sets using statistics and hierachical clustering
+    // hierachical_clustering_thr(clusters); //ALERT: not implemented yet
+}
+
+void UpdateRetainedSet(RetainedSet *R, RetainedSet *tempRetainedSet){
+    int old_number_of_points = R->number_of_points;
+    R->number_of_points += tempRetainedSet->number_of_points;
+    R->points = realloc(R->points, R->number_of_points * sizeof(Point));
+    if (R->points == NULL){
+        perror("Error: could not allocate memory\n");
+        exit(1);
+    }
+
+    int i;
+    for (i = 0; i < tempRetainedSet->number_of_points; i++){
+        R->points[old_number_of_points - 1 + i] = tempRetainedSet->points[i];
+    }
 }
 
 bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, int * offset){
@@ -342,7 +430,7 @@ bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, in
     return true;
 }
 
-void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet *retainedSet, Point *data_buffer, int size) {
+void StreamPoints(Cluster *clusters, CompressedSets *compressedSets, RetainedSet *retainedSet, Point *data_buffer, int size) {
     // TODO: implement the function
     // perform primary compression criteria and secondary compression criteria
 
@@ -366,19 +454,8 @@ void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet 
     }
 }
 
-void UpdateCentroids(Cluster *clusters) {
-    // TODO: revise the function
-    // update the centroids of the clusters
-    int i, j;
-    for (i = 0; i < K; i++) {
-        for (j = 0; j < DIMENSION; j++) {
-            clusters[i].centroid.coords[j] = clusters[i].sum[j] / clusters[i].size;
-        }
-    }
-}
 
-
-void PlotResults(Cluster *clusters, RetainedSet *retainedSet, CompressedSet *compressedSets) {
+void PlotResults(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *compressedSets) {
     // TODO: implement the function
     // print the results in a file
 }
@@ -410,8 +487,10 @@ int main(int argc, char** argv) {
 
     //initialize the clusters the retained set and the compressed sets
     Cluster *clusters;
-    RetainedSet *retainedSet;
-    CompressedSet *compressedSets;
+    RetainedSet retainedSet_normal = (init_retained_set());
+    CompressedSets compressedSets_normal = (init_compressed_sets());
+    RetainedSet *retainedSet = &retainedSet_normal;
+    CompressedSets *compressedSets = &compressedSets_normal;
 
     //initialize the data streams from the input files
     FILE *inputFile;
@@ -424,9 +503,9 @@ int main(int argc, char** argv) {
         }
 
         // Broadcast the input file to all processes
-        MPI_Bcast(&inputFile, 1, MPI_FILE, MASTER, MPI_COMM_WORLD);
+        MPI_Bcast(&inputFile, 1, MPI_File, MASTER, MPI_COMM_WORLD);
     }else{
-        MPI_Recv(&inputFile, 1, MPI_FILE, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&inputFile, 1, MPI_File, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     Point * data_buffer; 
@@ -436,8 +515,9 @@ int main(int argc, char** argv) {
 
     //use derived datatype to send the clusters to all processes
     MPI_Datatype arrayclusterType; // array of cluster
+    MPI_Datatype MPI_RETAINED_SET;
 
-    // TODO: implement the derived datatype for the cluster
+    // TODO: implement the derived datatype for the cluster and for the Retained Set
 
     // non parallel part of the algorithm
     // init of the clusters made by the master
@@ -451,7 +531,7 @@ int main(int argc, char** argv) {
         // init the clusters with the centroids
         // can be done in multithread
         // as reference to implement see take_k_centorids() in serial version
-        clusters = initClustersWithCentroids(data_buffer, DATA_BUFFER_SIZE);
+        clusters = initClustersWithCentroids(data_buffer, DATA_BUFFER_SIZE, K, DIMENSION);
 
         int i;        
         for (i = 1; i < size; i++) {
@@ -510,9 +590,10 @@ int main(int argc, char** argv) {
                     }
                 }
                 free(tempClusters);
-
-                // update the clusters
-                UpdateCentroids(clusters);
+                for (i = 0; i < K; i++) {
+                    // update the clusters
+                    UpdateCentroidsMultithr(clusters, 0, K, DIMENSION);
+                }
                 // send the updated clusters to the other processes
                 
                 # pragma omp parallel for shared(clusters)
@@ -551,9 +632,6 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // TODO: we need to decided if the retained set and the compressed sets should be updated in the master or keep in the local processes
-            // in the first case we need to send the retained set and the compressed sets to the master and then the master will update the retained set and the compressed sets
-
             // Reducing the retained set
             if (rank == MASTER) {
                 // reduce the retained set
@@ -574,6 +652,7 @@ int main(int argc, char** argv) {
             }
 
             // TODO: perform the secondary compression criteria in parallel version
+            secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size);
 
             // Reduce compressed sets in the master
 

@@ -9,6 +9,13 @@
 
 
 #include <stdlib.h>
+#include <stdbool.h>
+#include "../definitions.h"
+
+#ifdef KMEANS_THREADED
+#include <omp.h>
+#include <mpi.h>
+#endif
 
 /*
 * Simple k-means implementation for arbitrary data structures
@@ -47,13 +54,14 @@
 * available. The threshold is the the value of k*n at which to
 * move to multi-threading.
 */
-#ifdef KMEANS_THREADED
-#define KMEANS_THR_MAX 4
-#define KMEANS_THR_THRESHOLD 250000
-#endif
 
 #define kmeans_malloc(size) malloc(size)
 #define kmeans_free(ptr) free(ptr)
+
+typedef struct {
+    double coords[M];
+    int cluster;
+} Point;
 
 typedef void * Pointer;
 
@@ -117,6 +125,15 @@ typedef struct kmeans_config
 
 	/* Array to fill in with cluster numbers. User allocates and frees. */
 	int * clusters;
+
+	/* Flag to set parallel computation */
+	bool parallel;
+
+	/* If parallel, node rank */
+	int rank;
+
+	/* If parallel, total node number */
+	int size;
 
 } kmeans_config;
 
