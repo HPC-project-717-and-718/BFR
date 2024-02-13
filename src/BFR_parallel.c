@@ -364,10 +364,6 @@ void StreamPoints(Cluster *clusters, CompressedSet *compressedSets, RetainedSet 
             continue;
         }
     }
-
-
-    // secondary compression criteria
-    secondary_compression_criteria(clusters, retainedSet, compressedSets);
 }
 
 void UpdateCentroids(Cluster *clusters) {
@@ -484,7 +480,7 @@ int main(int argc, char** argv) {
         }
 
         if (!stop_criteria) {
-            // perform primary compression criteria and secondary compression criteria
+            // perform primary compression criteria
             StreamPoints(clusters, compressedSets, retainedSet, data_buffer, DATA_BUFFER_SIZE);
 
             // the master process gets the clusters data from the other processes
@@ -553,14 +549,35 @@ int main(int argc, char** argv) {
                         clusters[j].sum_squares[d] = 0;
                     }
                 }
-
-
-
             }
 
             // TODO: we need to decided if the retained set and the compressed sets should be updated in the master or keep in the local processes
             // in the first case we need to send the retained set and the compressed sets to the master and then the master will update the retained set and the compressed sets
 
+            // Reducing the retained set
+            if (rank == MASTER) {
+                // reduce the retained set
+                RetainedSet *tempRetainedSet;
+                tempRetainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
+
+                int i = 1;
+                for (; i < size; i++) {
+                    MPI_Recv(tempRetainedSet, 1, MPI_RETAINED_SET, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    // update the retained set with the retained set from the other processes
+                    UpdateRetainedSet(retainedSet, tempRetainedSet);
+                }
+
+                free(tempRetainedSet);
+            } else {
+                // send the retained set to the master
+                MPI_Send(retainedSet, 1, MPI_RETAINED_SET, MASTER, 0, MPI_COMM_WORLD);
+            }
+
+            // TODO: perform the secondary compression criteria in parallel version
+
+            // Reduce compressed sets in the master
+
+            // synchronize the processes
 
             if (rank == MASTER) {
                 if(DEBUG) {
