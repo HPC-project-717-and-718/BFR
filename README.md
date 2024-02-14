@@ -22,7 +22,6 @@ Github repository for the HPC course's project - Parallelization of the BFR algo
 │       ├── synthetic_d7.txt
 │       ├── synthetic_d8.txt
 │       └── synthetic_d9.txt
-<<<<<<< HEAD
 ├── lib
 │   ├── bfr_structures
 │   │   ├── bfr_structures.c
@@ -39,15 +38,8 @@ Github repository for the HPC course's project - Parallelization of the BFR algo
 │   └── kmeans_wrapper
 │       ├── kmeans_wrapper.c
 │       └── kmeans_wrapper.h
-<<<<<<< HEAD
 ├── output
 │   └── .gitkeep
-=======
-=======
-├── output
-│   └── .gitkeep
->>>>>>> Change structure accordingly
->>>>>>> Change structure accordingly
 ├── src
 │   ├── BFR_serial.c
 │   └── bfr_serial
@@ -74,8 +66,10 @@ The folders are organized as the following:
 ## How to use
 
 Compile the serial source code with:
+
 ```gcc src/BFR_serial.c lib/kmeans_wrapper/kmeans_wrapper.c lib/kmeans/kmeans.c lib/bfr_structures/bfr_structures.c  -o src/bfr_serial -lm```
 
 Compile the parallel source code with:
+
 ```mpicc src/BFR_parallel.c lib/bfr_structures/bfr_structures.c lib/kmeans_wrapper/kmeans_wrapper.c lib/kmeans/kmeans.c -o src/bfr_parallel -lm -fopenmp```
 
