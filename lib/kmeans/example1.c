@@ -41,6 +41,18 @@ static void d_centroid(const Pointer * objs, const int * clusters, size_t num_ob
 int
 main(int nargs, char **args)
 {
+	int rank, size;
+    MPI_Init(&argc, &argv);
+    // catch exceptions
+    if (MPI_Comm_rank(MPI_COMM_WORLD, &rank) != MPI_SUCCESS) {
+        printf("Error: MPI_Comm_rank\n");
+        exit(1);
+    }
+
+    if (MPI_Comm_size(MPI_COMM_WORLD, &size) != MPI_SUCCESS) {
+        printf("Error: MPI_Comm_size\n");
+        exit(1);
+    }
 	double v[10] = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
 	double c[2] = {2.0, 5.0};
 	kmeans_config config;
@@ -74,13 +86,15 @@ main(int nargs, char **args)
 	/* run k-means */
 	result = kmeans(&config);
 
-	/* print result */
-	for (i = 0; i < config.num_objs; i++)
-	{
-		if (config.objs[i])
-			printf("%g [%d]\n", *((double*)config.objs[i]), config.clusters[i]);
-		else
-			printf("NN [%d]\n", config.clusters[i]);
+	if(rank == 0){
+		/* print result */
+		for (i = 0; i < config.num_objs; i++)
+		{
+			if (config.objs[i])
+				printf("%g [%d]\n", *((double*)config.objs[i]), config.clusters[i]);
+			else
+				printf("NN [%d]\n", config.clusters[i]);
+		}
 	}
 
 	free(config.objs);

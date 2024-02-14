@@ -159,12 +159,13 @@ kmeans_config init_kmeans_config(int k, RetainedSet * R, bool parallel, int rank
     if(DEBUG) printf("              Selecting clusters.\n");
 	/* Populate the initial means vector with random start points */
 	for (i = 0; i < config.k; i++){
-		int r = lround((config.num_objs-1) * (1.0 * rand() / RAND_MAX));
-        if(DEBUG) printf("              r:%d\n", r);
-        if(DEBUG) printf("              R.points[r]:%lf %lf.\n", (*R).points[r].coords[0], (*R).points[r].coords[1]);
+		// int r = lround((config.num_objs-1) * (1.0 * rand() / RAND_MAX));
+        // if(DEBUG) printf("              r:%d\n", r);
+        // if(DEBUG) printf("              R.points[r]:%lf %lf.\n", (*R).points[r].coords[0], (*R).points[r].coords[1]);
 		/* Pointers to the randomly picked point */
         
-		config.centers[i] = &((*R).points[r]);
+		// config.centers[i] = &((*R).points[r]);
+		config.centers[i] = 0;  // just set means to 0, we need the algorithm to be deterministic
 	}
 
     return config;

@@ -6,20 +6,14 @@
 
 #include "kmeans.h"
 
-typedef struct point
-{
-	double x;
-	double y;
-} point;
-
 
 static double pt_distance(const Pointer a, const Pointer b)
 {
-	point *pa = (point*)a;
-	point *pb = (point*)b;
+	Point *pa = (Point*)a;
+	Point *pb = (Point*)b;
 
-	double dx = (pa->x - pb->x);
-	double dy = (pa->y - pb->y);
+	double dx = (pa->coords[0] - pb->coords[0]);
+	double dy = (pa->coords[1] - pb->coords[1]);
 
 	return dx*dx + dy*dy;
 }
@@ -28,11 +22,11 @@ static void pt_centroid(const Pointer * objs, const int * clusters, size_t num_o
 {
 	int i;
 	int num_cluster = 0;
-	point sum;
-	point **pts = (point**)objs;
-	point *center = (point*)centroid;
+	Point sum;
+	Point **pts = (Point**)objs;
+	Point *center = (Point*)centroid;
 
-	sum.x = sum.y = 0.0;
+	sum.coords[0] = sum.coords[1] = 0.0;
 
 	if (num_objs <= 0) return;
 
@@ -41,33 +35,45 @@ static void pt_centroid(const Pointer * objs, const int * clusters, size_t num_o
 		/* Only process objects of interest */
 		if (clusters[i] != cluster) continue;
 
-		sum.x += pts[i]->x;
-		sum.y += pts[i]->y;
+		sum.coords[0] += pts[i]->coords[0];
+		sum.coords[1] += pts[i]->coords[1];
 		num_cluster++;
 	}
 	if (num_cluster)
 	{
-		sum.x /= num_cluster;
-		sum.y /= num_cluster;
+		sum.coords[0] /= num_cluster;
+		sum.coords[1] /= num_cluster;
 		*center = sum;
 	}
 	return;
 }
 
 int
-main(int nargs, char **args)
+main(int argc, char **argv)
 {
+	int rank, size;
+    MPI_Init(&argc, &argv);
+    // catch exceptions
+    if (MPI_Comm_rank(MPI_COMM_WORLD, &rank) != MPI_SUCCESS) {
+        printf("Error: MPI_Comm_rank\n");
+        exit(1);
+    }
+
+    if (MPI_Comm_size(MPI_COMM_WORLD, &size) != MPI_SUCCESS) {
+        printf("Error: MPI_Comm_size\n");
+        exit(1);
+    }
 	kmeans_config config;
 	kmeans_result result;
 	int i, j;
 	int spread = 3;
-	point *pts;
-	point *init;
-	int print_results = 0;
+	Point *pts;
+	Point *init;
+	int print_results = 1;
 	unsigned long start;
 
-	int nptsincluster = 10000;
-	int k = 10;
+	int nptsincluster = 100;
+	int k = 2;
 
 	srand(time(NULL));
 
@@ -83,9 +89,13 @@ main(int nargs, char **args)
 	config.centers = calloc(config.k, sizeof(Pointer));
 	config.clusters = calloc(config.num_objs, sizeof(int));
 
+	config.parallel = true;
+	config.rank = rank;
+	config.size = size;
+
 	/* Storage for raw data */
-	pts = calloc(config.num_objs, sizeof(point));
-	init = calloc(config.k, sizeof(point));
+	pts = calloc(config.num_objs, sizeof(Point));
+	init = calloc(config.k, sizeof(Point));
 
 	/* Create test data! */
 	/* Populate with K gaussian clusters of data */
@@ -99,8 +109,8 @@ main(int nargs, char **args)
 			int n = j*nptsincluster + i;
 
 			/* Populate raw data */
-			pts[n].x = z1;
-			pts[n].y = z2;
+			pts[n].coords[0] = z1;
+			pts[n].coords[1] = z2;
 
 			/* Pointer to raw data */
 			config.objs[n] = &(pts[n]);
@@ -116,31 +126,67 @@ main(int nargs, char **args)
 		/* Pointers to raw data */
 		config.centers[i] = &(init[i]);
 
-		if (print_results)
-			printf("center[%d]\t%g\t%g\n", i, init[i].x, init[i].y);
+		if (print_results && rank == 0)
+			printf("center[%d]\t%g\t%g\n", i, init[i].coords[0], init[i].coords[1]);
 	}
 
 	/* run k-means! */
 	start = time(NULL);
 	result = kmeans(&config);
 
-	printf("\n");
-	printf("Iteration count: %d\n", config.total_iterations);
-	printf("     Time taken: %ld seconds\n", (time(NULL) - start));
-	printf(" Iterations/sec: %.3g\n", (1.0*config.total_iterations)/(time(NULL) - start));
-	printf("\n");
-
 	/* print results */
-	if (print_results)
+	if (print_results && rank == MASTER)
 	{
+
+		printf("\n");
+		printf("Iteration count: %d\n", config.total_iterations);
+		printf("     Time taken: %ld seconds\n", (time(NULL) - start));
+		printf(" Iterations/sec: %.3g\n", (1.0*config.total_iterations)/(time(NULL) - start));
+		printf("\n");
 		for (i = 0; i < config.num_objs; i++)
 		{
-			point *pt = (point*)(config.objs[i]);
+			Point *pt = (Point*)(config.objs[i]);
 
 			if (config.objs[i])
-				printf("%g\t%g\t%d\n", pt->x, pt->y, config.clusters[i]);
+				printf("%g\t%g\t%d\n", pt->coords[0], pt->coords[1], config.clusters[i]);
 			else
 				printf("N\tN\t%d\n", config.clusters[i]);
+		}
+	}
+
+	if(rank == MASTER){
+		printf("AGAIN!!!");
+		/* Populate the initial means vector with random start points */
+		for (i = 0; i < config.k; i++)
+		{
+			/* Pointers to raw data */
+			config.centers[i] = &(init[i]);
+		}
+
+		config.parallel = false;
+		
+		/* run k-means! */
+		start = time(NULL);
+		result = kmeans(&config);
+
+		/* print results */
+		if (print_results && rank == MASTER)
+		{
+
+			printf("\n");
+			printf("Iteration count: %d\n", config.total_iterations);
+			printf("     Time taken: %ld seconds\n", (time(NULL) - start));
+			printf(" Iterations/sec: %.3g\n", (1.0*config.total_iterations)/(time(NULL) - start));
+			printf("\n");
+			for (i = 0; i < config.num_objs; i++)
+			{
+				Point *pt = (Point*)(config.objs[i]);
+
+				if (config.objs[i])
+					printf("%g\t%g\t%d\n", pt->coords[0], pt->coords[1], config.clusters[i]);
+				else
+					printf("N\tN\t%d\n", config.clusters[i]);
+			}
 		}
 	}
 
@@ -150,6 +196,9 @@ main(int nargs, char **args)
 
 	free(init);
 	free(pts);
-
+	
+    // Finalize the MPI environment
+    MPI_Finalize();
+    return 0;
 }
 

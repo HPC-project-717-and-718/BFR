@@ -22,7 +22,7 @@
 #define data_streamer FILE *             // data streamer type
 #define BETA 4                           // beta parameter for BFR algorithm
 
-#define KMEANS_THREADED
+#define KMEANS_THREADED                  // comment out for serial version
 
 # define MASTER 0
 # define NUMBER_OF_THREADS 4
