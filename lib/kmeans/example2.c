@@ -69,10 +69,11 @@ main(int argc, char **argv)
 	int spread = 3;
 	Point *pts;
 	Point *init;
+	Point *init_2;
 	int print_results = 1;
 	unsigned long start;
 
-	int nptsincluster = 100;
+	int nptsincluster = 10;
 	int k = 2;
 
 	srand(time(NULL));
@@ -96,6 +97,7 @@ main(int argc, char **argv)
 	/* Storage for raw data */
 	pts = calloc(config.num_objs, sizeof(Point));
 	init = calloc(config.k, sizeof(Point));
+	init_2 = calloc(config.k, sizeof(Point));
 
 	/* Create test data! */
 	/* Populate with K gaussian clusters of data */
@@ -123,11 +125,15 @@ main(int argc, char **argv)
 		int r = lround(config.num_objs * (1.0 * rand() / RAND_MAX));
 		/* Populate raw data */
 		init[i] = pts[r];
+		init_2[i] = pts[r];
 		/* Pointers to raw data */
 		config.centers[i] = &(init[i]);
 
+		Point* pointArray = (Point*)config.centers[i];
+		double* coords_ptr = pointArray->coords;
+
 		if (print_results && rank == 0)
-			printf("center[%d]\t%g\t%g\n", i, init[i].coords[0], init[i].coords[1]);
+			printf("center[%d]\t%g\t%g\n", i, coords_ptr[0], coords_ptr[1]);
 	}
 
 	/* run k-means! */
@@ -160,7 +166,13 @@ main(int argc, char **argv)
 		for (i = 0; i < config.k; i++)
 		{
 			/* Pointers to raw data */
-			config.centers[i] = &(init[i]);
+			config.centers[i] = &(init_2[i]);
+
+			Point* pointArray = (Point*)config.centers[i];
+			double* coords_ptr = pointArray->coords;
+
+			if (print_results && rank == 0)
+				printf("center[%d]\t%g\t%g\n", i, coords_ptr[0], coords_ptr[1]);
 		}
 
 		config.parallel = false;
@@ -195,6 +207,7 @@ main(int argc, char **argv)
 	free(config.centers);
 
 	free(init);
+	free(init_2);
 	free(pts);
 	
     // Finalize the MPI environment
