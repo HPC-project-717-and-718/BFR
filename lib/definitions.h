@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <string.h>
 
-#define K 2                              // number of clusters
+#define K 10                              // number of clusters
 #define M 2                              // number of dimensions
 #define DIMENSION 2                      // number of dimensions
 #define S 100                            // sample size

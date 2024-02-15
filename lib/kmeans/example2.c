@@ -73,8 +73,8 @@ main(int argc, char **argv)
 	int print_results = 1;
 	unsigned long start;
 
-	int nptsincluster = 10;
-	int k = 2;
+	int nptsincluster = 100000;
+	int k = 10;
 
 	srand(time(NULL));
 

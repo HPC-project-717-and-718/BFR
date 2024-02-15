@@ -58,7 +58,7 @@ update_r(kmeans_config *config)
 
 		Point* pointArray = (Point*)obj;
 		double* coords_ptr = pointArray->coords;
-		printf("\n%d: Node %lf %lf added to cluster %d (%lf, %lf) with dist %lf.\n",config->rank, coords_ptr[0], coords_ptr[1], curr_cluster, cluster_coords_ptr[0], cluster_coords_ptr[1], curr_distance);
+		// printf("\n%d: Node %lf %lf added to cluster %d (%lf, %lf) with dist %lf.\n",config->rank, coords_ptr[0], coords_ptr[1], curr_cluster, cluster_coords_ptr[0], cluster_coords_ptr[1], curr_distance);
 		/* Store the nearest cluster this object is in */
 		config->clusters[i] = curr_cluster;
 	}
@@ -170,10 +170,10 @@ static void update_r_parallel(kmeans_config *config)
 
 	// if(config->rank == MASTER){
 	// 	printf("0: cluster assignment BEFORE\n");
-	// 	int i;
-	// 	for (i = 0; i < config->num_objs; i++){
+	// // 	int i;
+	// // 	for (i = 0; i < config->num_objs; i++){
 	// 		printf("%d ", config->clusters[i]);
-	// 	}
+	// // 	}
 	// 	printf("\n");
 	// }
 
@@ -224,9 +224,9 @@ static void update_r_parallel(kmeans_config *config)
 
 	// // if(config->rank == MASTER){
 	// printf("\n%d: cluster assignment AFTER\n", config->rank);
-	// for (i = 0; i < config->num_objs; i++){
+	// // for (i = 0; i < config->num_objs; i++){
 	// 	printf("%d ", config->clusters[i]);
-	// }
+	// // }
 	// printf("\n");
 	// }
 
@@ -263,16 +263,16 @@ update_means_parallel(kmeans_config *config)
 	
 			double* coords_ptr = pointArray->coords;
 
-			printf("\n%d: Point coords are %lf, %lf.\n", config->rank, coords_ptr[0], coords_ptr[1]);
+			// printf("\n%d: Point coords are %lf, %lf.\n", config->rank, coords_ptr[0], coords_ptr[1]);
 			if(config->rank != MASTER) {
-				printf("\n%d: Sending coords to MASTER.\n", config->rank);
+				// printf("\n%d: Sending coords to MASTER.\n", config->rank);
 				MPI_Send(coords_ptr, M, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD);
 			}
 		}
 
 		/* MASTER has to receive each centroid coordinates and update them accordingly */
 		if(config->rank == MASTER){
-			printf("\n%d: Receiving coords (MASTER).\n", config->rank);
+			// printf("\n%d: Receiving coords (MASTER).\n", config->rank);
 			double* temp_coords_ptr = (double*)malloc(M*sizeof(double));
 			/* Receive new centers */
 			int i, offset;
@@ -323,7 +323,7 @@ update_means_parallel(kmeans_config *config)
 			for(i = 1; i < config->size; i++){
 				clusters_per_node = config->k / config->size;
 				clusters_per_node_all = clusters_per_node;
-				if (config->rank == config->size-1){
+				if (i == config->size-1){
 					clusters_per_node += config->k - config->size*clusters_per_node;
 				}
 
@@ -344,23 +344,23 @@ update_means_parallel(kmeans_config *config)
 		}
 	}
 
-	printf("\n%d: Broadcasting coordinates.\n", config->rank);
+	// printf("\n%d: Broadcasting coordinates.\n", config->rank);
 	int i, offset;
 	for (i = 0; i < config->k; i++){
 		Point* pointArray = (Point*)config->centers[i];
 		double* coords_ptr = pointArray->coords;
 		MPI_Bcast(coords_ptr, M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
 		if(config->rank != MASTER){
-			printf("\n%d: Updating coordinates.\n", config->rank);
+			// printf("\n%d: Updating coordinates.\n", config->rank);
 			/* Update centroid coordinates */
 			int k;
 			for (k = 0; k < M; k++) {
 				pointArray->coords[k] = coords_ptr[k];
     		}
-			printf("\n%d: New coords are: %lf %lf.\n", config->rank, pointArray->coords[0], pointArray->coords[1]);
+			// printf("\n%d: New coords are: %lf %lf.\n", config->rank, pointArray->coords[0], pointArray->coords[1]);
 		}
 		else {			
-			printf("\n%d: Sending coordinates: %lf %lf.\n", config->rank, coords_ptr[0], coords_ptr[1]);
+			// printf("\n%d: Sending coordinates: %lf %lf.\n", config->rank, coords_ptr[0], coords_ptr[1]);
 		}
 	}
 }
@@ -403,21 +403,21 @@ kmeans(kmeans_config *config)
 
 	while (1)
 	{
-		if(config->rank == MASTER){
-			printf("0: cluster assignment BEFORE\n");
-			int i;
-			for (i = 0; i < config->num_objs; i++){
-				printf("%d ", config->clusters[i]);
-			}
-			printf("\n");
-		}
-		printf("\n%d: Iterating.\n", config->rank);
+		// if(config->rank == MASTER){
+		// 	// printf("0: cluster assignment BEFORE\n");
+		// 	int i;
+		// 	for (i = 0; i < config->num_objs; i++){
+		// 		// printf("%d ", config->clusters[i]);
+		// 	}
+		// 	// printf("\n");
+		// }
+		// printf("\n%d: Iterating.\n", config->rank);
 
 		/* Store the previous state of the clustering */
 		memcpy(clusters_last, config->clusters, clusters_sz);
 
 #ifdef KMEANS_THREADED
-		if(config->parallel){
+		if(config->parallel && config->num_objs > config->size){
 			// printf("\n%d: In parallel, updating r.\n", config->rank);
 			/* At this point, all nodes have the same config. Have master coordinate the clustering, then broadcast the results. */
 			update_r_parallel(config);
@@ -431,14 +431,14 @@ kmeans(kmeans_config *config)
 #ifdef KMEANS_THREADED
 		}
 #endif
-		if(config->rank == MASTER){
-			printf("0: cluster assignment AFTER\n");
-			int i;
-			for (i = 0; i < config->num_objs; i++){
-				printf("%d ", config->clusters[i]);
-			}
-			printf("\n");
-		}
+		// if(config->rank == MASTER){
+		// 	// printf("0: cluster assignment AFTER\n");
+		// 	int i;
+		// 	for (i = 0; i < config->num_objs; i++){
+		// 		// printf("%d ", config->clusters[i]);
+		// 	}
+		// 	// printf("\n");
+		// }
 		/*
 		 * if all the cluster numbers are unchanged since last time,
 		 * we are at a stable solution, so we can stop here
