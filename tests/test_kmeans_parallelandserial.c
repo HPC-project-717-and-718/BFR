@@ -7,44 +7,212 @@
 #include "kmeans.h"
 
 
-static double pt_distance(const Pointer a, const Pointer b)
-{
-	Point *pa = (Point*)a;
-	Point *pb = (Point*)b;
+// the euclidean distance has been modified to fit normal kmeans' requirements
+double distance(const Pointer a, const Pointer b){
+    /*
+    * Calculate euclidean distance between two points
+    *
+    * Algorithm:
+    *   1. calculate sum of squares of differences between coordinates of two points
+    *   2. calculate square root of sum
+    *   
+    * Parameters:
+    *   - p1: first point
+    *   - p2: second point
+    *
+    * Returns:
+    *   - distance between two points as double
+    */
+    Point* p1 = (Point*)a;
+    Point* p2 = (Point*)b;
+    //TODO: insert control if the cast is successful or not
 
-	double dx = (pa->coords[0] - pb->coords[0]);
-	double dy = (pa->coords[1] - pb->coords[1]);
+    double sum = 0;
+    int i = 0;
+    for (i = 0; i < M; i++){
+        sum += (p1->coords[i] - p2->coords[i]) * (p1->coords[i] - p2->coords[i]);
+    }
+    sum = sqrt(sum);
 
-	return dx*dx + dy*dy;
+    return sum;
 }
 
-static void pt_centroid(const Pointer * objs, const int * clusters, size_t num_objs, int cluster, Pointer centroid)
-{
-	int i;
+static void centroid(const Pointer * objs, const int * clusters, size_t num_objs, int cluster, Pointer centroid){
+    /*
+    * Given a collection of objects categorized by cluster, returns their centroid
+    *
+    * Algorithm:
+    *   1. calculate sum of coordinates in all dimentions for all points of the cluster
+    *   2. update cluster coordinates
+    *   
+    * Parameters:
+    *   - objs: all points being clustered
+    *   - clusters: array of cluster ids
+    *   - num_objs: # of objs
+    *   - cluster: cluster that needs update
+    *   - centroid: centroid of cluster that needs update
+    *
+    * Returns:
+    *   - void
+    * 
+    * Note: this might be inefficient, as in BFR we could save a cluster by its statistics directly
+    *       but for now we'll stick to normal kmeans' requirements
+    */
+    // if(DEBUG) printf("              Updating centroid for cluster %d.\n", cluster);
+	int i, j;
 	int num_cluster = 0;
 	Point sum;
 	Point **pts = (Point**)objs;
 	Point *center = (Point*)centroid;
 
-	sum.coords[0] = sum.coords[1] = 0.0;
+	for (i = 0; i < M; i++){
+        sum.coords[i] = 0.0;
+    }
 
 	if (num_objs <= 0) return;
 
-	for (i = 0; i < num_objs; i++)
-	{
+    // if(DEBUG) printf("              Reading all points being clustered.\n");
+	for (i = 0; i < num_objs; i++){
 		/* Only process objects of interest */
 		if (clusters[i] != cluster) continue;
 
-		sum.coords[0] += pts[i]->coords[0];
-		sum.coords[1] += pts[i]->coords[1];
-		num_cluster++;
+        // if(DEBUG) printf("              Reading point %d's coordinates.\n", i);
+        for (j = 0; j < M; j++){
+            sum.coords[j] += pts[i]->coords[j];
+            // if(DEBUG) printf("                  Sum of coords is: %lf\n", sum.coords[i]);
+        }
+		num_cluster = num_cluster + 1;
 	}
-	if (num_cluster)
-	{
-		sum.coords[0] /= num_cluster;
-		sum.coords[1] /= num_cluster;
+    // if(DEBUG) printf("              Read all points, updating cluster coordinates.\n");
+	if (num_cluster){
+        for (i = 0; i < M; i++){
+            sum.coords[i] /= num_cluster;
+        }
 		*center = sum;
 	}
+    // if(DEBUG) printf("              Cluster coordinates updated.\n");
+	return;
+}
+
+
+// the euclidean distance has been modified to fit normal kmeans' requirements
+double distance_parallel(const Pointer a, const Pointer b){
+    /*
+    * Calculate euclidean distance between two points
+    *
+    * Algorithm:
+    *   1. calculate sum of squares of differences between coordinates of two points
+    *   2. calculate square root of sum
+    *   
+    * Parameters:
+    *   - p1: first point
+    *   - p2: second point
+    *
+    * Returns:
+    *   - distance between two points as double
+    */
+    Point* p1 = (Point*)a;
+    Point* p2 = (Point*)b;
+    //TODO: insert control if the cast is successful or not
+
+    double sum = 0;
+    int i = 0;
+    for (i = 0; i < M; i++){
+        sum += (p1->coords[i] - p2->coords[i]) * (p1->coords[i] - p2->coords[i]);
+    }
+    sum = sqrt(sum);
+
+    return sum;
+}
+
+static void centroid_parallel(const Pointer * objs, const int * clusters, size_t num_objs, int cluster, Pointer centroid){
+    /*
+    * Given a collection of objects categorized by cluster, returns their centroid
+    *
+    * Algorithm:
+    *   1. calculate sum of coordinates in all dimentions for all points of the cluster
+    *   2. update cluster coordinates
+    *   
+    * Parameters:
+    *   - objs: all points being clustered
+    *   - clusters: array of cluster ids
+    *   - num_objs: # of objs
+    *   - cluster: cluster that needs update
+    *   - centroid: centroid of cluster that needs update
+    *
+    * Returns:
+    *   - void
+    * 
+    * Note: this might be inefficient, as in BFR we could save a cluster by its statistics directly
+    *       but for now we'll stick to normal kmeans' requirements
+    */
+    // if(DEBUG) printf("              Updating centroid for cluster %d.\n", cluster);
+	int num_cluster = 0;
+	Point sum;
+	Point **pts = (Point**)objs;
+	Point *center = (Point*)centroid;
+
+	int i, j;
+	// #pragma omp parallel for
+	for (i = 0; i < M; i++){
+        sum.coords[i] = 0.0;
+    }
+
+	if (num_objs <= 0) return;
+
+	// #pragma omp parallel
+	// {
+
+	// 	int i, j;
+	// 	double sum_coords_private[M];
+
+	// 	#pragma omp parallel for
+	// 	for (i = 0; i < M; i++){
+	// 		sum_coords_private[i] = 0.0;
+	// 	}
+
+	// 	#pragma omp for reduction(+:num_cluster)
+	// 	for (i = 0; i < num_objs; i++){
+	// 		/* Only process objects of interest */
+	// 		if (clusters[i] != cluster) continue;
+
+	// 		for (j = 0; j < M; j++){
+	// 			sum_coords_private[j] += pts[i]->coords[j];
+	// 		}
+	// 		num_cluster = num_cluster + 1;
+	// 	}
+	// 	#pragma omp critical
+	// 	{
+	// 		int i;
+	// 		for (i = 0; i < M; i++){
+	// 			sum.coords[i] += sum_coords_private[i];
+	// 		}
+	// 	}
+	// }
+
+	// #pragma omp parallel for reduction(+:num_cluster,sum_coords[M]) private(j)
+	for (i = 0; i < num_objs; i++){
+		/* Only process objects of interest */
+		if (clusters[i] != cluster) continue;
+
+        // if(DEBUG) printf("              Reading point %d's coordinates.\n", i);
+		// #pragma omp parallel for
+        for (j = 0; j < M; j++){
+            sum.coords[j] += pts[i]->coords[j];
+            // if(DEBUG) printf("                  Sum of coords is: %lf\n", sum.coords[i]);
+        }
+		num_cluster = num_cluster + 1;
+	}
+    // if(DEBUG) printf("              Read all points, updating cluster coordinates.\n");
+	if (num_cluster){
+		int i;
+		// #pragma omp parallel for
+        for (i = 0; i < M; i++){
+            sum.coords[i] /= num_cluster;
+        }
+		*center = sum;
+	}
+    // if(DEBUG) printf("              Cluster coordinates updated.\n");
 	return;
 }
 
@@ -65,7 +233,7 @@ main(int argc, char **argv)
     }
 	kmeans_config config;
 	kmeans_result result;
-	int i, j;
+	int i, j, d;
 	int spread = 3;
 	Point *pts;
 	Point *init;
@@ -82,8 +250,8 @@ main(int argc, char **argv)
 	config.k = k;
 	config.num_objs = config.k * nptsincluster;
 	config.max_iterations = 200;
-	config.distance_method = pt_distance;
-	config.centroid_method = pt_centroid;
+	config.distance_method = distance_parallel;
+	config.centroid_method = centroid_parallel;
 
 	/* Inputs for K-means */
 	config.objs = calloc(config.num_objs, sizeof(Pointer));
@@ -104,18 +272,19 @@ main(int argc, char **argv)
 	for (j = 0; j < config.k; j++) {
 		for (i = 0; i < nptsincluster; i++)
 		{
-			double u1 = 1.0 * random() / RAND_MAX;
-			double u2 = 1.0 * random() / RAND_MAX;
-			double z1 = spread * j + sqrt(-2*log2(u1))*cos(2*M_PI*u2);
-			double z2 = spread * j + sqrt(-2*log2(u1))*sin(2*M_PI*u2);
 			int n = j*nptsincluster + i;
+			for (d = 0; d < M; d++)
+			{
+				double u1 = 1.0 * random() / RAND_MAX;
+				double u2 = 1.0 * random() / RAND_MAX;
+				double z1 = spread * j + sqrt(-2*log2(u1))*cos(2*M_PI*u2);
 
-			/* Populate raw data */
-			pts[n].coords[0] = z1;
-			pts[n].coords[1] = z2;
+				/* Populate raw data */
+				pts[n].coords[d] = z1;
 
+			}
 			/* Pointer to raw data */
-			config.objs[n] = &(pts[n]);
+			config.objs[n] = &(pts[n]);			
 		}
 	}
 
@@ -153,10 +322,18 @@ main(int argc, char **argv)
 		{
 			Point *pt = (Point*)(config.objs[i]);
 
-			if (config.objs[i])
-				printf("%g\t%g\t%d\n", pt->coords[0], pt->coords[1], config.clusters[i]);
-			else
+
+			if (config.objs[i]){
+				for (d = 0; d < M; d++)
+				{
+					printf("%g\t", pt->coords[d]);
+				}
+				printf("%d\n", config.clusters[i]);
+			}
+			else{
 				printf("N\tN\t%d\n", config.clusters[i]);
+			}
+			
 		}
 	}
 
@@ -176,6 +353,8 @@ main(int argc, char **argv)
 		}
 
 		config.parallel = false;
+		config.distance_method = distance;
+		config.centroid_method = centroid;
 		
 		/* run k-means! */
 		start = time(NULL);
@@ -194,10 +373,18 @@ main(int argc, char **argv)
 			{
 				Point *pt = (Point*)(config.objs[i]);
 
-				if (config.objs[i])
-					printf("%g\t%g\t%d\n", pt->coords[0], pt->coords[1], config.clusters[i]);
-				else
+
+				if (config.objs[i]){
+					for (d = 0; d < M; d++)
+					{
+						printf("%g\t", pt->coords[d]);
+					}
+					printf("%d\n", config.clusters[i]);
+				}
+				else{
 					printf("N\tN\t%d\n", config.clusters[i]);
+				}
+				
 			}
 		}
 	}
