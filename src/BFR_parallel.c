@@ -4,25 +4,22 @@
 // TODO: there will some problem here
 
 # define MASTER 0
-# define DEBUG 1
-# define K 10
-# define M 2
 # define NUMBER_OF_THREADS 4
 # define DATA_BUFFER_SIZE 250 // equal to serial's MAX_SIZE_OF_BUFFER / NUMBER_OF_THREADS
 # define UPPER_BOUND_ITERATIONS 1000 // equal to serial's UPPER_BOUND_ITERATIONS
 
 
-float distance(Point p1, Point p2, int M) {
-    // euclidean distance between two points
-    float sum = 0;
-    int i;
-    for (i = 0; i < M; i++) {
-        sum += (p1.coords[i] - p2.coords[i]) * (p1.coords[i] - p2.coords[i]);
-    }
-    return sqrt(sum);
-}
+// float distance(Point p1, Point p2, int M) {
+//     // euclidean distance between two points
+//     float sum = 0;
+//     int i;
+//     for (i = 0; i < M; i++) {
+//         sum += (p1.coords[i] - p2.coords[i]) * (p1.coords[i] - p2.coords[i]);
+//     }
+//     return sqrt(sum);
+// }
 
-Cluster *initClustersWithCentroids(Point *data_buffer, int size, int K, int M) {
+Cluster *initClustersWithCentroids(Point *data_buffer, int size, int k, int dimensions) {
     // the function has the same structure of the serial version but in multithread version and with some adjustment
     
     // create a set of clusters K
@@ -411,7 +408,7 @@ void remove_cset_from_compressed_sets(CompressedSet *C, CompressedSet * c) {
     C = temp;
 }
 
-bool hierachical_clust_parallel(compressedSets * C, int rank, int size){
+bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
     /*
     * Description:
     * hierchieal clustering of the compressed sets
@@ -474,7 +471,7 @@ bool hierachical_clust_parallel(compressedSets * C, int rank, int size){
                 }
 
                 start = rank * number_of_sets; 
-            }else if (size => C->number_of_sets){
+            }else if (size >= C->number_of_sets){
                 // case where each process has to compute the distance vector only once
                 if (rank > C->number_of_sets){
                     stop_criteria = true;
@@ -501,7 +498,7 @@ bool hierachical_clust_parallel(compressedSets * C, int rank, int size){
                     // if the rank is the master the distance vector is already computed
                     // example: if the number of sets is 10 and the number of processes is 4, the first 3 processes will compute the distance vector for 3 sets, the last process will compute the distance vector for 1 set
                     // sets i would have been computed by the process i / number_of_points - 1, in the example the set 4 would have been computed by the process 1
-                    int expected_rank = floor(i / number_of_points);
+                    int expected_rank = floor(i / number_of_sets);
                     MPI_Recv(distance_matrix[i], C->number_of_sets, MPI_FLOAT, expected_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 }
 
@@ -531,7 +528,6 @@ bool hierachical_clust_parallel(compressedSets * C, int rank, int size){
         }
 
         // 3. find the minimum distance in the distance matrix
-        int start, number_of_sets;
 
         if (size < C->number_of_sets ){
             // case where at least one process has to compute the distance vector more than once
@@ -546,7 +542,7 @@ bool hierachical_clust_parallel(compressedSets * C, int rank, int size){
             }
 
             start = rank * number_of_sets;
-        }else if (size => C->number_of_sets){
+        }else if (size >= C->number_of_sets){
             // case where each process has to compute the distance vector only once
             if (rank > C->number_of_sets){
                 stop_criteria = true;
@@ -595,7 +591,7 @@ bool hierachical_clust_parallel(compressedSets * C, int rank, int size){
             MPI_Send(&min_j, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
         }
         
-        if (min_distance >= FLT_MAX - 100. or iterations > UPPER_BOUND_ITERATIONS) {
+        if (min_distance >= FLT_MAX - 100. || iterations > UPPER_BOUND_ITERATIONS) {
             stop_criteria = true;
             break;
         }
@@ -613,13 +609,13 @@ bool hierachical_clust_parallel(compressedSets * C, int rank, int size){
 
                 add_cset_to_compressed_sets(C, temp);
                 // 7. remove the two clusters from the compressed sets
-                remove_cset_from_compressed_sets(C, C->sets[min_i]);
-                remove_cset_from_compressed_sets(C, C->sets[min_j]);
+                remove_cset_from_compressed_sets(C, &C->sets[min_i]);
+                remove_cset_from_compressed_sets(C, &C->sets[min_j]);
                 changes = true;
 
-                MPI_Bcast(new_cset.number_of_points, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-                MPI_Bcast(new_cset.sum, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
-                MPI_Bcast(new_cset.sum_square, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
+                MPI_Bcast(new_cset->number_of_points, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+                MPI_Bcast(new_cset->sum, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
+                MPI_Bcast(new_cset->sum_square, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
 
                 free(new_cset);
             } else {
@@ -658,8 +654,8 @@ bool hierachical_clust_parallel(compressedSets * C, int rank, int size){
                 }
 
                 add_cset_to_compressed_sets(C, new_cset);
-                remove_cset_from_compressed_sets(C, C->sets[min_i]);
-                remove_cset_from_compressed_sets(C, C->sets[min_j]);
+                remove_cset_from_compressed_sets(C, &C->sets[min_i]);
+                remove_cset_from_compressed_sets(C, &C->sets[min_j]);
 
             }else{
                 distance_matrix[min_i][min_j] = FLT_MAX;
