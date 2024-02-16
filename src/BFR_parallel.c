@@ -273,7 +273,98 @@ bool primary_compression_criteria(Cluster *clusters, Point p) {
     return false;
 }
 
-void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSet *compressedSets) {
+
+Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size){
+
+    if(DEBUG && rank == MASTER) printf("          Initializing standard kmeans data.\n");
+    Cluster * miniclusters = init_cluster((*k));
+
+    // TODO: discuss a correct limit for not running standard kmeans
+    // as of now, do not run kmeans if the number of points is < k
+    // we may want to run kmeans when we have more than k*constant number of points
+    if((*R).number_of_points < (*k)){
+        if(DEBUG && rank == MASTER) printf("          Retained set has less points (%d) than clusters(%d). Returning empty miniclusters.\n", (*R).number_of_points, (*k));
+        return miniclusters;
+    }
+
+    kmeans_config config = init_kmeans_config((*k), R, true, rank, size);
+    if(DEBUG && rank == MASTER) printf("          Executing standard kmeans.\n");
+
+    if(rank == MASTER){
+        kmeans_result result = kmeans(&config);
+
+        if(DEBUG) printf("          Iteration count: %d\n", config.total_iterations);
+        if(DEBUG) printf("          Transferring kmeans cluster data to miniclusters.\n");
+        
+        int i;
+        for (i = 0; i < config.num_objs; i++){
+            Point *pt = (Point *)(config.objs[i]);
+
+            update_cluster(&miniclusters[config.clusters[i]], *pt);
+        }
+
+        // create new correct retained set with only the points left alone in their clusters
+        RetainedSet new_R = init_retained_set();
+        int * tightness_flag;
+        tightness_flag = calloc((*k), sizeof(int));
+        for (i = 0; i < config.num_objs; i++){
+            Point *pt = (Point *)(config.objs[i]);
+            // TODO: use a different measure to determine a minicluster's tightness
+            int index = config.clusters[i];
+
+            if (!tightness_evaluation_cluster(miniclusters[index], tightness_flag, index)){
+                add_point_to_retained_set(&new_R, *pt);
+            }
+            else {
+                if(DEBUG) printf("Point not added to retained set: %g\t%g\t%d\n", pt->coords[0], pt->coords[1], config.clusters[i]);
+            }
+        }
+
+        if(DEBUG){
+            printf("          Old retained set:\n");
+            print_retainedset(*R);
+        }
+
+        // TODO: discuss whether this is correct or not
+        // free old retained set and replace with new one
+        free((*R).points);
+        (*R).points = new_R.points;
+        (*R).number_of_points = new_R.number_of_points;
+
+        if(DEBUG){
+            printf("          New retained set:\n");
+            print_retainedset(*R);
+        }
+
+        if(DEBUG) printf("          Freeing previously allocated data for standard kmeans.\n");
+
+        //update miniclusters, retain only with tightness_flag = 2
+        (*k) = update_miniclusters(&miniclusters, tightness_flag, (*k));
+
+        // free the kmeans' config data
+        free(config.objs);
+        free(config.centers);
+        free(config.clusters);
+
+        // free tightness flag
+        free(tightness_flag);
+
+        // update miniclusters' centroids
+        update_centroids(&miniclusters, (*k));
+
+    }
+    else{
+        kmeans(&config);
+        free(config.objs);
+        free(config.centers);
+        free(config.clusters);
+    }
+
+    // If MASTER, will be correctly filled. If not, it's an empty array
+    return miniclusters;
+}
+
+void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSet *compressedSets, int rank, int size) {
     // TODO: implement the function
     /*
     * Description:
@@ -299,7 +390,7 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
     // 1. cluster retained set R with classical K-Means, creating k2 clusters, also keep in R the outlayers
     // TODO: implement the function K-Means with open mp
     int k2;
-    Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, k2); //ALERT: not implemented yet
+    Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, k2, rank, size); //ALERT: not implemented yet
 
     // 2. clusters that have a tightness measure above a certain threshold are added to the CompressedSet C 
     // using open mp
@@ -313,6 +404,21 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
 
     // 4. try aggregating compressed sets using statistics and hierchieal clustering
     hierachical_clustering_thr(clusters); //ALERT: not implemented yet
+}
+
+void UpdateRetainedSet(RetainedSet *R, RetainedSet *tempRetainedSet){
+    int old_number_of_points = R->number_of_points;
+    R->number_of_points += tempRetainedSet->number_of_points;
+    R->points = realloc(R->points, R->number_of_points * sizeof(Point));
+    if (R->points == NULL){
+        perror("Error: could not allocate memory\n");
+        exit(1);
+    }
+
+    int i;
+    for (i = 0; i < tempRetainedSet->number_of_points; i++){
+        R->points[old_number_of_points - 1 + i] = tempRetainedSet->points[i];
+    }
 }
 
 bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, int * offset){
@@ -887,8 +993,9 @@ int main(int argc, char** argv) {
             }
 
             // TODO: perform the secondary compression criteria in parallel version
-
+            
             // TODO: insert the kmeans clustering in the parallel version, implemented in "kmeans.c"
+            secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size);
 
             // TODO: filtering of cluster in the master by tightness criterion
 
