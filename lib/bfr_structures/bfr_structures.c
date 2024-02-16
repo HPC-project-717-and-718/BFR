@@ -716,7 +716,9 @@ void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclu
     * Returns:
     *   - void
     */
-    add_miniclusters_to_compressedsets(C, miniclusters, number_of_miniclusters);
+    if (number_of_miniclusters>0){
+        add_miniclusters_to_compressedsets(C, miniclusters, number_of_miniclusters);
+    }
     if(DEBUG) printf("\n\nNumber of compressed sets after adding miniclusters: %d\n\n", C->number_of_sets);
 
     bool stop_merging = false;
