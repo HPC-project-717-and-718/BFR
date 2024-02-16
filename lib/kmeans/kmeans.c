@@ -78,83 +78,6 @@ update_means(kmeans_config *config)
 
 #ifdef KMEANS_THREADED
 
-// static void * update_r_threaded_main(void *args)
-// {
-// 	kmeans_config *config = (kmeans_config*)args;
-// 	update_r(config);
-// 	pthread_exit(args);
-// }
-
-// static void update_r_threaded(kmeans_config *config)
-// {
-// 	/* Computational complexity is function of objs/clusters */
-// 	/* We only spin up threading infra if we need more than one core */
-// 	/* running. We keep the threshold high so the overhead of */
-// 	/* thread management is small compared to thread compute time */
-// 	int num_threads = config->num_objs * config->k / KMEANS_THR_THRESHOLD;
-
-// 	/* Can't run more threads than the maximum */
-// 	num_threads = (num_threads > KMEANS_THR_MAX ? KMEANS_THR_MAX : num_threads);
-
-// 	/* If the problem size is small, don't bother w/ threading */
-// 	if (num_threads < 1)
-// 	{
-// 		update_r(config);
-// 	}
-// 	else
-// 	{
-// 		pthread_t thread[KMEANS_THR_MAX];
-// 		pthread_attr_t thread_attr;
-// 		kmeans_config thread_config[KMEANS_THR_MAX];
-// 		int obs_per_thread = config->num_objs / num_threads;
-// 		int i, rc;
-
-// 		for (i = 0; i < num_threads; i++)
-// 		{
-// 			/*
-// 			* Each thread gets a copy of the config, but with the list pointers
-// 			* offest to the start of the batch the thread is responsible for, and the
-// 			* object count number adjusted similarly.
-// 			*/
-// 			memcpy(&(thread_config[i]), config, sizeof(kmeans_config));
-// 			thread_config[i].objs += i*obs_per_thread;
-// 			thread_config[i].clusters += i*obs_per_thread;
-// 			thread_config[i].num_objs = obs_per_thread;
-// 			if (i == num_threads-1)
-// 			{
-// 				thread_config[i].num_objs += config->num_objs - num_threads*obs_per_thread;
-// 			}
-
-// 			/* Initialize and set thread detached attribute */
-// 			pthread_attr_init(&thread_attr);
-// 			pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_JOINABLE);
-
-// 			/* Now we just run the thread, on its subset of the data */
-// 			rc = pthread_create(&thread[i], &thread_attr, update_r_threaded_main, (void *) &thread_config[i]);
-// 			if (rc)
-// 			{
-				// printf("ERROR: return code from pthread_create() is %d\n", rc);
-// 				exit(-1);
-// 			}
-// 		}
-
-// 		/* Free attribute and wait for the other threads */
-// 		pthread_attr_destroy(&thread_attr);
-
-// 		/* Wait for all calculations to complete */
-// 		for (i = 0; i < num_threads; i++)
-// 		{
-// 		    void *status;
-// 			rc = pthread_join(thread[i], &status);
-// 			if (rc)
-// 			{
-				// printf("ERROR: return code from pthread_join() is %d\n", rc);
-// 				exit(-1);
-// 			}
-// 		}
-// 	}
-// }
-
 static void * update_r_parallel_main(void *args)
 {
 	kmeans_config *config = (kmeans_config*)args;
@@ -167,15 +90,6 @@ static void update_r_parallel(kmeans_config *config)
 
 	/* For each node, create a config copy with the objects, clusters and num_objs offset correctly*/
 	kmeans_config node_config;
-
-	// if(config->rank == MASTER){
-	// 	printf("0: cluster assignment BEFORE\n");
-	// // 	int i;
-	// // 	for (i = 0; i < config->num_objs; i++){
-	// 		printf("%d ", config->clusters[i]);
-	// // 	}
-	// 	printf("\n");
-	// }
 
 	// printf("\n%d: Copying memory.\n", config->rank);
 	memcpy(&(node_config), config, sizeof(kmeans_config));
@@ -206,33 +120,16 @@ static void update_r_parallel(kmeans_config *config)
 
 	int *clusters_copy = malloc(node_config.num_objs*sizeof(int));
 
-	// printf("\n%d: Printing local results.\n",config->rank);
+	// printf("\n%d: Copying local results.\n",config->rank);
+	# pragma omp parallel for 
 	for (i = 0; i < node_config.num_objs; i++) {
-		// printf("\n%d: %d\n", config->rank, node_config.clusters[i]);
 		clusters_copy[i] = node_config.clusters[i];
 	}
-	// printf("\n\n");
 
-	// printf("\n%d: Copying local results.\n",config->rank);
-	// memcpy(clusters_copy, node_config.clusters, rcounts[config->rank]*sizeof(int));
 	
 	// printf("\n%d: Gathering results.\n", config->rank);
-	// MPI_Allgatherv(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, config->clusters, rcounts, displs, MPI_INT, MPI_COMM_WORLD);
 	MPI_Allgatherv(clusters_copy, rcounts[config->rank], MPI_INT, config->clusters, rcounts, displs, MPI_INT, MPI_COMM_WORLD);	
 
-    
-
-	// // if(config->rank == MASTER){
-	// printf("\n%d: cluster assignment AFTER\n", config->rank);
-	// // for (i = 0; i < config->num_objs; i++){
-	// 	printf("%d ", config->clusters[i]);
-	// // }
-	// printf("\n");
-	// }
-
-	// Point* pointArray = (Point*)config->objs[0];
-	// double* coords_ptr = pointArray->coords;
-	// printf("\n%d: First obj: %lf %lf\n", config->rank, coords_ptr[0], coords_ptr[1]);
 
 	free(clusters_copy);
 	free(displs);
@@ -275,14 +172,14 @@ update_means_parallel(kmeans_config *config)
 			// printf("\n%d: Receiving coords (MASTER).\n", config->rank);
 			double* temp_coords_ptr = (double*)malloc(M*sizeof(double));
 			/* Receive new centers */
-			int i, offset;
+			int i, offset, k;
 			for(i = 1; i < config->k; i++){
 				offset = i;
 				MPI_Recv(temp_coords_ptr, M, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 				
 				Point* pointArray = (Point*)config->centers[offset];
 				// Copy received values to the coords array
-				int k;
+				# pragma omp parallel for
 				for (k = 0; k < M; k++) {
 					pointArray->coords[k] = temp_coords_ptr[k];
     			}
@@ -319,7 +216,7 @@ update_means_parallel(kmeans_config *config)
 		if(config->rank == MASTER){
 			double* temp_coords_ptr = (double*)malloc(M*sizeof(double));
 			/* Receive new centers */
-			int j;
+			int j, k;
 			for(i = 1; i < config->size; i++){
 				clusters_per_node = config->k / config->size;
 				clusters_per_node_all = clusters_per_node;
@@ -334,7 +231,7 @@ update_means_parallel(kmeans_config *config)
 					Point* pointArray = (Point*)config->centers[offset];
 
 					// Copy received values to the coords array
-					int k;
+					# pragma omp parallel for
 					for (k = 0; k < M; k++) {
 						pointArray->coords[k] = temp_coords_ptr[k];
     				}
@@ -345,7 +242,7 @@ update_means_parallel(kmeans_config *config)
 	}
 
 	// printf("\n%d: Broadcasting coordinates.\n", config->rank);
-	int i, offset;
+	int i, k;
 	for (i = 0; i < config->k; i++){
 		Point* pointArray = (Point*)config->centers[i];
 		double* coords_ptr = pointArray->coords;
@@ -353,7 +250,7 @@ update_means_parallel(kmeans_config *config)
 		if(config->rank != MASTER){
 			// printf("\n%d: Updating coordinates.\n", config->rank);
 			/* Update centroid coordinates */
-			int k;
+			# pragma omp parallel for
 			for (k = 0; k < M; k++) {
 				pointArray->coords[k] = coords_ptr[k];
     		}

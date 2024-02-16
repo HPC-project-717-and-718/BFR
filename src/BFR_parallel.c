@@ -259,6 +259,7 @@ bool primary_compression_criteria(Cluster *clusters, Point p) {
     return false;
 }
 
+
 Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size){
 
     if(DEBUG && rank == MASTER) printf("          Initializing standard kmeans data.\n");
@@ -349,7 +350,7 @@ Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size){
     return miniclusters;
 }
 
-void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *compressedSets, int rank, int size) {
+void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSet *compressedSets, int rank, int size) {
     // TODO: implement the function
     /*
     * Description:
@@ -970,9 +971,9 @@ int main(int argc, char** argv) {
             }
 
             // TODO: perform the secondary compression criteria in parallel version
-            secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size);
-
+            
             // TODO: insert the kmeans clustering in the parallel version, implemented in "kmeans.c"
+            secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size);
 
             // TODO: filtering of cluster in the master by tightness criterion
 
