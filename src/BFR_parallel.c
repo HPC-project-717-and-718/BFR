@@ -56,7 +56,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int k, int dime
         float farthest_distance = 0;
         int j;
         // multithread the for loop to find the farthest point from the previous centroids
-        # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index, farthest_distance)
+        // # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index, farthest_distance)
         for (j = 0; j < size; j++) {
             float current_distance = 0;
             int k;
@@ -75,8 +75,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int k, int dime
         // set the farthest point as the centroid of the cluster
         centroids[i] = data_buffer[farthest_point_index];
 
-        int j;
-        // multithread the for loop to update the sum and sum_square of the cluster
+                // multithread the for loop to update the sum and sum_square of the cluster
         # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index)
         for (j = 0; j < M; j++) {
             clusters[i]->sum[j] = data_buffer[farthest_point_index]->coords[j];
@@ -208,7 +207,7 @@ void add_cluster_to_compressed_sets(CompressedSet *compressedSets, Cluster c) {
     // TODO: copy the function from the serial version trying to multithread it
 }
 
-void add_cset_to_compressed_sets(CompressedSet *compressedSets, CompressedSet * c) {
+void add_cset_to_compressed_sets(CompressedSets *compressedSets, CompressedSet * c) {
     compressedSets -> number_of_sets += 1;
 
     compressedSets -> sets = (CompressedSet *)realloc(compressedSets -> sets, compressedSets -> number_of_sets * sizeof(CompressedSet));
@@ -295,15 +294,15 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
 
     // 1. cluster retained set R with classical K-Means, creating k2 clusters, also keep in R the outlayers
     // TODO: implement the function K-Means with open mp
-    int k2;
-    Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, k2); //ALERT: not implemented yet
+    int k2 = K;
+    Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, &k2, rank, size);
 
     // 2. clusters that have a tightness measure above a certain threshold are added to the CompressedSet C 
     // using open mp
     int i;
     # pragma omp parallel for shared(k2_clusters, clusters)
     for (i = 0; i < k2; i++){
-       add_cluster_to_compressed_sets(clusters, k2_clusters[i]);
+       //    add_cluster_to_compressed_sets(clusters, k2_clusters[i]);
     }
 
     free(k2_clusters);
@@ -706,14 +705,16 @@ int main(int argc, char** argv) {
 
     //initialize the clusters the retained set and the compressed sets
     Cluster *clusters;
-    RetainedSet *retainedSet;
-    CompressedSet *compressedSets;
+    RetainedSet retainedSet_normal = (init_retained_set());
+    CompressedSets compressedSets_normal = (init_compressed_sets());
+    RetainedSet *retainedSet = &retainedSet_normal;
+    CompressedSets *compressedSets = &compressedSets_normal;
 
     //init retained set and compressed sets
-    retainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
-    retainedSet -> number_of_points = 0;
-    compressedSets = (CompressedSet *)malloc(sizeof(CompressedSet));
-    compressedSets -> number_of_sets = 0;
+    // retainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
+    // retainedSet -> number_of_points = 0;
+    // compressedSets = (CompressedSet *)malloc(sizeof(CompressedSet));
+    // compressedSets -> number_of_sets = 0;
 
     //initialize the data streams from the input files
     FILE *inputFile;
@@ -883,6 +884,7 @@ int main(int argc, char** argv) {
             }
 
             // TODO: perform the secondary compression criteria in parallel version
+            secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size);
 
             // TODO: insert the kmeans clustering in the parallel version, implemented in "kmeans.c"
 
