@@ -21,8 +21,8 @@ typedef struct {
 
 typedef struct {
     int number_of_points;
-    int sum[M];
-    int sum_square[M];
+    double sum[M]; // sum of the points in the set
+    double sum_square[M];
 } CompressedSet;
 
 typedef struct {
