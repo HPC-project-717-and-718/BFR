@@ -13,6 +13,3 @@ bfr_serial.sh.*
 
 #ignore data
 /data
-
-#ignore .idea
-/.idea
