@@ -10,9 +10,9 @@
 #include <assert.h>
 #include <string.h>
 
-#define K 10                              // number of clusters
-#define M 2                              // number of dimensions
-#define DIMENSION 2                      // number of dimensions
+#define K 10                             // number of clusters
+#define M 3                              // number of dimensions
+#define DIMENSION 3                      // number of dimensions
 #define S 100                            // sample size
 #define T 3.5                            // threshold
 #define LIMIT_S 10                       // limit for rand generation of coordinates for initial centroids
