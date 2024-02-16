@@ -108,8 +108,16 @@ CompressedSet *merge_cset(CompressedSet *c1, CompressedSet *c2) {
     return new_cset;
 }
 
-void add_cset_to_compressed_sets(CompressedSets *compressedSets, CompressedSet *c) {
-    // TODO: copy the function from the serial version trying to multithread it
+void add_cset_to_compressed_sets(CompressedSets *compressedSets, CompressedSet * c) {
+    compressedSets -> number_of_sets += 1;
+
+    compressedSets -> sets = (CompressedSet *)realloc(compressedSets -> sets, compressedSets -> number_of_sets * sizeof(CompressedSet));
+
+    CompressedSet temp = *c;
+
+    compressedSets -> sets[compressedSets -> number_of_sets - 1] = temp;
+
+    free(c);
 }
 
 void hierachical_clustering_thr(CompressedSets * C){
@@ -165,12 +173,12 @@ void hierachical_clustering_thr(CompressedSets * C){
         CompressedSet * new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
 
         // 5. check the tightness of the new cluster
-        if (tightness(new_cset) > T) {
+        if (tightness_evaluation_cset(*new_cset)) {
             // 6. add the new cluster to the compressed sets
             add_cset_to_compressed_sets(C, new_cset);
             // 7. remove the two clusters from the compressed sets
-            remove_cset_from_compressed_sets(C, C->sets[min_i]);
-            remove_cset_from_compressed_sets(C, C->sets[min_j]);
+            remove_cset_from_compressed_sets(C, &(C->sets[min_i]), min_i);
+            remove_cset_from_compressed_sets(C, &(C->sets[min_j]), min_j);
             changes = true;
         } else {
             // 8. set the distance between the two clusters to infinity
@@ -193,20 +201,8 @@ void hierachical_clustering_thr(CompressedSets * C){
     }
 }
 
-void add_cluster_to_compressed_sets(CompressedSets *compressedSets, Cluster *c) {
+void add_cluster_to_compressed_sets(CompressedSets *compressedSets, Cluster c) {
     // TODO: copy the function from the serial version trying to multithread it
-}
-
-void add_cset_to_compressed_sets(CompressedSets *compressedSets, CompressedSet * c) {
-    compressedSets -> number_of_sets += 1;
-
-    compressedSets -> sets = (CompressedSet *)realloc(compressedSets -> sets, compressedSets -> number_of_sets * sizeof(CompressedSet));
-
-    CompressedSet temp = *c;
-
-    compressedSets -> sets[compressedSets -> number_of_sets - 1] = temp;
-
-    free(c);
 }
 
 bool primary_compression_criteria(Cluster *clusters, Point p) {
@@ -350,7 +346,7 @@ Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size){
     return miniclusters;
 }
 
-void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSet *compressedSets, int rank, int size) {
+void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *compressedSets, int rank, int size) {
     // TODO: implement the function
     /*
     * Description:
@@ -473,17 +469,22 @@ void PlotResults(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *co
     // print the results in a file
 }
 
-void remove_cset_from_compressed_sets(CompressedSet *C, CompressedSet * c) {
+void remove_cset_from_compressed_sets(CompressedSets *C, CompressedSet * c, int index) {
     C->number_of_sets -= 1;
+    // ALERT: c'era già una funzione per inizializzare i compressed sets, staticamente. Quindi visto che questi son dichiarati dinamicamente prevedo che delle free falliscano
+    CompressedSets temp_pointer = init_compressed_sets();
+    CompressedSets * temp = &temp_pointer;
 
-    CompressedSets * temp = (CompressedSet *)malloc(sizeof(CompressedSet) * C->number_of_sets);
-
-    int i;
+    int i, counter = 0;
     for (i = 0; i < C->number_of_sets; i++) {
-        if (C->sets[i] == c) {
+        // if (C->sets[i] == c) {
+        //     continue;
+        // }
+        if (i == index) {
             continue;
         }
-        temp[i] = C->sets[i];
+        temp->sets[counter] = C->sets[i];
+        counter++;
     }
 
     free(C->sets);
@@ -686,18 +687,18 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
             CompressedSet * new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
 
             // 5. check the tightness of the new cluster
-            if (tightness(new_cset) > T) {
+            if (tightness_evaluation_cset(*new_cset)) {
                 // 6. add the new cluster to the compressed sets
                 CompressedSet * temp = (CompressedSet *)malloc(sizeof(CompressedSet));
                 *temp = *new_cset;
 
                 add_cset_to_compressed_sets(C, temp);
                 // 7. remove the two clusters from the compressed sets
-                remove_cset_from_compressed_sets(C, &C->sets[min_i]);
-                remove_cset_from_compressed_sets(C, &C->sets[min_j]);
+                remove_cset_from_compressed_sets(C, &C->sets[min_i], min_i);
+                remove_cset_from_compressed_sets(C, &C->sets[min_j], min_j);
                 changes = true;
 
-                MPI_Bcast(new_cset->number_of_points, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+                MPI_Bcast(&(new_cset->number_of_points), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
                 MPI_Bcast(new_cset->sum, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
                 MPI_Bcast(new_cset->sum_square, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
 
@@ -738,8 +739,8 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
                 }
 
                 add_cset_to_compressed_sets(C, new_cset);
-                remove_cset_from_compressed_sets(C, &C->sets[min_i]);
-                remove_cset_from_compressed_sets(C, &C->sets[min_j]);
+                remove_cset_from_compressed_sets(C, &C->sets[min_i], min_i);
+                remove_cset_from_compressed_sets(C, &C->sets[min_j], min_j);
 
             }else{
                 distance_matrix[min_i][min_j] = FLT_MAX;
@@ -765,268 +766,269 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
     
 
 
-int main(int argc, char** argv) {
-    int rank, size;
+// int main(int argc, char** argv) {
+//     int rank, size;
 
-    //set the number of threads
-    omp_set_num_threads(NUMBER_OF_THREADS);
+//     //set the number of threads
+//     omp_set_num_threads(NUMBER_OF_THREADS);
 
-    // Initialize the MPI environment
-    MPI_Init(&argc, &argv);
-    // catch exceptions
-    if (MPI_Comm_rank(MPI_COMM_WORLD, &rank) != MPI_SUCCESS) {
-        printf("Error: MPI_Comm_rank\n");
-        exit(1);
-    }
+//     // Initialize the MPI environment
+//     MPI_Init(&argc, &argv);
+//     // catch exceptions
+//     if (MPI_Comm_rank(MPI_COMM_WORLD, &rank) != MPI_SUCCESS) {
+//         printf("Error: MPI_Comm_rank\n");
+//         exit(1);
+//     }
 
-    if (MPI_Comm_size(MPI_COMM_WORLD, &size) != MPI_SUCCESS) {
-        printf("Error: MPI_Comm_size\n");
-        exit(1);
-    }
+//     if (MPI_Comm_size(MPI_COMM_WORLD, &size) != MPI_SUCCESS) {
+//         printf("Error: MPI_Comm_size\n");
+//         exit(1);
+//     }
 
-    if (DEBUG) {
-        printf("Hello from %d of %d\n", rank, size);
-    }
+//     if (DEBUG) {
+//         printf("Hello from %d of %d\n", rank, size);
+//     }
 
-    //initialize the clusters the retained set and the compressed sets
-    Cluster *clusters;
-    RetainedSet retainedSet_normal = (init_retained_set());
-    CompressedSets compressedSets_normal = (init_compressed_sets());
-    RetainedSet *retainedSet = &retainedSet_normal;
-    CompressedSets *compressedSets = &compressedSets_normal;
+//     //initialize the clusters the retained set and the compressed sets
+//     Cluster *clusters;
+//     RetainedSet retainedSet_normal = (init_retained_set());
+//     CompressedSets compressedSets_normal = (init_compressed_sets());
+//     RetainedSet *retainedSet = &retainedSet_normal;
+//     CompressedSets *compressedSets = &compressedSets_normal;
 
-    //init retained set and compressed sets
-    // retainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
-    // retainedSet -> number_of_points = 0;
-    // compressedSets = (CompressedSet *)malloc(sizeof(CompressedSet));
-    // compressedSets -> number_of_sets = 0;
+//     //init retained set and compressed sets
+//     // retainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
+//     // retainedSet -> number_of_points = 0;
+//     // compressedSets = (CompressedSet *)malloc(sizeof(CompressedSet));
+//     // compressedSets -> number_of_sets = 0;
 
-    //initialize the data streams from the input files
-    FILE *inputFile;
-    if (rank == MASTER) {
-        // TODO: revise the file opening
-        inputFile = fopen("input.txt", "r");
-        if (inputFile == NULL) {
-            printf("Error opening input file\n");
-            MPI_Abort(MPI_COMM_WORLD, 1);
-        }
+//     //initialize the data streams from the input files
+//     FILE *inputFile;
+//     if (rank == MASTER) {
+//         // TODO: revise the file opening
+//         inputFile = fopen("input.txt", "r");
+//         if (inputFile == NULL) {
+//             printf("Error opening input file\n");
+//             MPI_Abort(MPI_COMM_WORLD, 1);
+//         }
 
-        // Broadcast the input file to all processes
-        MPI_Bcast(&inputFile, 1, MPI_File, MASTER, MPI_COMM_WORLD);
-    }else{
-        MPI_Recv(&inputFile, 1, MPI_File, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+//         // Broadcast the input file to all processes
+//         // ALERT: FIX FIX FIX
+//         // MPI_Bcast(&inputFile, 1, MPI_File, MASTER, MPI_COMM_WORLD);
+//     }else{
+//         // MPI_Recv(&inputFile, 1, MPI_File, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//     }
 
-    Point * data_buffer; 
+//     Point * data_buffer; 
 
-    int offset = rank * DATA_BUFFER_SIZE;
-    int round = 0;
+//     int offset = rank * DATA_BUFFER_SIZE;
+//     int round = 0;
 
-    //use derived datatype to send the clusters to all processes
-    MPI_Datatype arrayclusterType; // array of cluster
-    MPI_Datatype MPI_RETAINED_SET;
+//     //use derived datatype to send the clusters to all processes
+//     MPI_Datatype arrayclusterType; // array of cluster
+//     MPI_Datatype MPI_RETAINED_SET;
 
-    // TODO: implement the derived datatype for the cluster and for the Retained Set
+//     // TODO: implement the derived datatype for the cluster and for the Retained Set
 
-    // non parallel part of the algorithm
-    // init of the clusters made by the master
-    if (rank == MASTER) {
-        // load the data buffer from the input file with DATA_BUFFER_SIZE points
-        bool flag_loaded_data = load_data(inputFile, data_buffer, offset, rank, round);
+//     // non parallel part of the algorithm
+//     // init of the clusters made by the master
+//     if (rank == MASTER) {
+//         // load the data buffer from the input file with DATA_BUFFER_SIZE points
+//         bool flag_loaded_data = load_data(inputFile, data_buffer, offset, rank, round);
 
 
-        // increment the round
-        round = round + 1;
-        // init the clusters with the centroids
-        // can be done in multithread
-        // as reference to implement see take_k_centorids() in serial version
-        clusters = initClustersWithCentroids(data_buffer, DATA_BUFFER_SIZE, K, DIMENSION);
+//         // increment the round
+//         round = round + 1;
+//         // init the clusters with the centroids
+//         // can be done in multithread
+//         // as reference to implement see take_k_centorids() in serial version
+//         clusters = initClustersWithCentroids(data_buffer, DATA_BUFFER_SIZE, K, DIMENSION);
 
-        int i;        
-        for (i = 1; i < size; i++) {
-            //TODO: adjust this send and next receive
-            MPI_Send(clusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD);
-        }
-    } else {
-        // receive the clusters from the master
-        MPI_Recv(clusters, 1, arrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    }
+//         int i;        
+//         for (i = 1; i < size; i++) {
+//             //TODO: adjust this send and next receive
+//             MPI_Send(clusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD);
+//         }
+//     } else {
+//         // receive the clusters from the master
+//         MPI_Recv(clusters, 1, arrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//     }
 
-    bool stop_criteria = false;
+//     bool stop_criteria = false;
 
-    // Read the input file simultaneously
-    do{
-        // update the offset
-        offset = rank * DATA_BUFFER_SIZE + round * size * DATA_BUFFER_SIZE;
-        // load the data buffer from the input file with DATA_BUFFER_SIZE points
-        bool flag_loaded_data = load_data(inputFile, data_buffer, offset, rank, round);
-        // increment the round
-        round = round + 1;
+//     // Read the input file simultaneously
+//     do{
+//         // update the offset
+//         offset = rank * DATA_BUFFER_SIZE + round * size * DATA_BUFFER_SIZE;
+//         // load the data buffer from the input file with DATA_BUFFER_SIZE points
+//         bool flag_loaded_data = load_data(inputFile, data_buffer, offset, rank, round);
+//         // increment the round
+//         round = round + 1;
 
-        // catch exceptions data_buffer is NULL or data_buffer is not full
-        // TODO: ALERT THIS IF IS ERRONEOUS
-        if (data_buffer == NULL || data_buffer.size() < DATA_BUFFER_SIZE) {
-            stop_criteria = true;
-        }
+//         // catch exceptions data_buffer is NULL or data_buffer is not full
+//         // TODO: ALERT THIS IF IS ERRONEOUS
+//         // if (data_buffer == NULL || data_buffer.size() < DATA_BUFFER_SIZE) {
+//         //     stop_criteria = true;
+//         // }
 
-        if (!stop_criteria) {
-            // perform primary compression criteria
-            StreamPoints(clusters, retainedSet, data_buffer, DATA_BUFFER_SIZE);
+//         if (!stop_criteria) {
+//             // perform primary compression criteria
+//             StreamPoints(clusters, compressedSets, retainedSet, data_buffer, DATA_BUFFER_SIZE);
 
-            // the master process gets the clusters data from the other processes
-            // and updates the clusters
-            if (rank == MASTER) {
-                // the master receive the clusters from the other processes
-                // create a temporary clusters to store the clusters from the other processes   
-                Cluster *tempClusters;
+//             // the master process gets the clusters data from the other processes
+//             // and updates the clusters
+//             if (rank == MASTER) {
+//                 // the master receive the clusters from the other processes
+//                 // create a temporary clusters to store the clusters from the other processes   
+//                 Cluster *tempClusters;
 
-                tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
+//                 tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
 
-                int i = 1;
-                for (; i < size; i++) {
-                    MPI_Recv(tempClusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    // update the clusters with the clusters from the other processes
-                    // TODO: is important to acknowledge that after the first round the values of the clusters for each M should be erased, if not the clusters will be updated readding also the values of the previous rounds but only the master will have the correct values
-                    int j, d;
+//                 int i = 1;
+//                 for (; i < size; i++) {
+//                     MPI_Recv(tempClusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//                     // update the clusters with the clusters from the other processes
+//                     // TODO: is important to acknowledge that after the first round the values of the clusters for each M should be erased, if not the clusters will be updated readding also the values of the previous rounds but only the master will have the correct values
+//                     int j, d;
 
-                    # pragma omp parallel for shared(tempClusters, clusters) private(d)
-                    for (j = 0; j < K; j++) {
-                        // TODO: NAIVE IMPLEMENTATION revise
-                        clusters[j].size += tempClusters[j].size;
-                        for (d = 0; d < M; d++) {
-                            clusters[j].sum[d] += tempClusters[j].sum[d];
-                            clusters[j].sum_squares[d] += tempClusters[j].sum_squares[d];
-                        }
-                    }
-                }
-                free(tempClusters);
-                for (i = 0; i < K; i++) {
-                    // update the clusters
-                    UpdateCentroidsMultithr(clusters, 0, K, DIMENSION);
-                }
-                // send the updated clusters to the other processes
+//                     # pragma omp parallel for shared(tempClusters, clusters) private(d)
+//                     for (j = 0; j < K; j++) {
+//                         // TODO: NAIVE IMPLEMENTATION revise
+//                         clusters[j].size += tempClusters[j].size;
+//                         for (d = 0; d < M; d++) {
+//                             clusters[j].sum[d] += tempClusters[j].sum[d];
+//                             clusters[j].sum_squares[d] += tempClusters[j].sum_squares[d];
+//                         }
+//                     }
+//                 }
+//                 free(tempClusters);
+//                 for (i = 0; i < K; i++) {
+//                     // update the clusters
+//                     UpdateCentroidsMultithr(clusters, 0, K, DIMENSION);
+//                 }
+//                 // send the updated clusters to the other processes
                 
-                # pragma omp parallel for shared(clusters)
-                for (i = 1; i < size; i++) {
-                    MPI_Send(clusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD);
-                }
-            } else {
-                // send the clusters to the master
-                MPI_Send(clusters, 1, arrayclusterType, MASTER, 0, MPI_COMM_WORLD);
+//                 # pragma omp parallel for shared(clusters)
+//                 for (i = 1; i < size; i++) {
+//                     MPI_Send(clusters, 1, arrayclusterType, i, 0, MPI_COMM_WORLD);
+//                 }
+//             } else {
+//                 // send the clusters to the master
+//                 MPI_Send(clusters, 1, arrayclusterType, MASTER, 0, MPI_COMM_WORLD);
 
-                //create a temporary clusters to store the clusters from the master
-                Cluster *tempClusters;
+//                 //create a temporary clusters to store the clusters from the master
+//                 Cluster *tempClusters;
 
-                tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
+//                 tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
 
-                // receive the updated clusters from the master
-                MPI_Recv(tempClusters,1, arrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//                 // receive the updated clusters from the master
+//                 MPI_Recv(tempClusters,1, arrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-                // update the clusters centroids with the clusters from the master
-                int j = 0;
-                for (; j < K; j++) {
-                    clusters[j].size += tempClusters[j].size;
-                    clusters[j].centroid = tempClusters[j].centroid;
-                }
+//                 // update the clusters centroids with the clusters from the master
+//                 int j = 0;
+//                 for (; j < K; j++) {
+//                     clusters[j].size += tempClusters[j].size;
+//                     clusters[j].centroid = tempClusters[j].centroid;
+//                 }
 
-                free(tempClusters);
+//                 free(tempClusters);
 
-                // erase the values of the clusters for each M in the array sum and sum_square
-                j = 0;
-                for (; j < K; j++) {
-                    int d = 0;
-                    for (; d < M; d++) {
-                        clusters[j].sum[d] = 0;
-                        clusters[j].sum_squares[d] = 0;
-                    }
-                }
-            }
+//                 // erase the values of the clusters for each M in the array sum and sum_square
+//                 j = 0;
+//                 for (; j < K; j++) {
+//                     int d = 0;
+//                     for (; d < M; d++) {
+//                         clusters[j].sum[d] = 0;
+//                         clusters[j].sum_squares[d] = 0;
+//                     }
+//                 }
+//             }
 
-            // TODO: we need to decided if the retained set and the compressed sets should be updated in the master or keep in the local processes
-            // in the first case we need to send the retained set and the compressed sets to the master and then the master will update the retained set and the compressed sets
+//             // TODO: we need to decided if the retained set and the compressed sets should be updated in the master or keep in the local processes
+//             // in the first case we need to send the retained set and the compressed sets to the master and then the master will update the retained set and the compressed sets
 
-            // Reducing the retained set, by gathering the retained set from the other processes and updating the retained set
-            if (rank == MASTER) {
-                // reduce the retained set
-                RetainedSet *tempRetainedSet;
-                tempRetainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
+//             // Reducing the retained set, by gathering the retained set from the other processes and updating the retained set
+//             if (rank == MASTER) {
+//                 // reduce the retained set
+//                 RetainedSet *tempRetainedSet;
+//                 tempRetainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
 
-                int i = 1;
-                for (; i < size; i++) {
-                    MPI_Recv(tempRetainedSet, 1, MPI_RETAINED_SET, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    // update the retained set with the retained set from the other processes
-                    UpdateRetainedSet(retainedSet, tempRetainedSet);
-                }
+//                 int i = 1;
+//                 for (; i < size; i++) {
+//                     MPI_Recv(tempRetainedSet, 1, MPI_RETAINED_SET, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+//                     // update the retained set with the retained set from the other processes
+//                     UpdateRetainedSet(retainedSet, tempRetainedSet);
+//                 }
 
-                free(tempRetainedSet);
-            } else {
-                // send the retained set to the master
-                MPI_Send(retainedSet, 1, MPI_RETAINED_SET, MASTER, 0, MPI_COMM_WORLD);
+//                 free(tempRetainedSet);
+//             } else {
+//                 // send the retained set to the master
+//                 MPI_Send(retainedSet, 1, MPI_RETAINED_SET, MASTER, 0, MPI_COMM_WORLD);
 
-                free(retainedSet->points);
-                free(retainedSet);
+//                 free(retainedSet->points);
+//                 free(retainedSet);
 
-                retainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
-                retainedSet->number_of_points = 0;
-            }
+//                 retainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
+//                 retainedSet->number_of_points = 0;
+//             }
 
-            // TODO: perform the secondary compression criteria in parallel version
+//             // TODO: perform the secondary compression criteria in parallel version
             
-            // TODO: insert the kmeans clustering in the parallel version, implemented in "kmeans.c"
-            secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size);
+//             // TODO: insert the kmeans clustering in the parallel version, implemented in "kmeans.c"
+//             secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size);
 
-            // TODO: filtering of cluster in the master by tightness criterion
+//             // TODO: filtering of cluster in the master by tightness criterion
 
-            // TODO: merge the clusters in the compressed sets in the master
+//             // TODO: merge the clusters in the compressed sets in the master
 
-            // TODO: perform the hierachical clustering in parallel version
+//             // TODO: perform the hierachical clustering in parallel version
 
-            hierachical_clust_parallel(compressedSets);
+//             hierachical_clust_parallel(compressedSets, rank, size);
 
 
-            // TODO: synchronize the processes
+//             // TODO: synchronize the processes
 
-            if (rank == MASTER) {
-                if(DEBUG) {
-                    printf("Round %d\n", round);
-                    int i, j;
-                    for (i = 0; i < K; i++) {
-                        printf("Cluster %d: ", i);
-                        for (j = 0; j < M; j++) {
-                            printf("%f ", clusters[i].centroid.coords[j]);
-                        }
-                        printf("\n");
-                    }
-                }
-            }
+//             if (rank == MASTER) {
+//                 if(DEBUG) {
+//                     printf("Round %d\n", round);
+//                     int i, j;
+//                     for (i = 0; i < K; i++) {
+//                         printf("Cluster %d: ", i);
+//                         for (j = 0; j < M; j++) {
+//                             printf("%f ", clusters[i].centroid.coords[j]);
+//                         }
+//                         printf("\n");
+//                     }
+//                 }
+//             }
 
-        }
-    }while(!stop_criteria);
+//         }
+//     }while(!stop_criteria);
     
-    // Close the input file
-    if (rank == MASTER) {
-        fclose(inputFile);
-    }
+//     // Close the input file
+//     if (rank == MASTER) {
+//         fclose(inputFile);
+//     }
 
-    if (rank == MASTER) {
-        // TODO: try merge compressed sets with clusters in the master, using tightness criterion evaluate if the clusters can be merged
-    }
+//     if (rank == MASTER) {
+//         // TODO: try merge compressed sets with clusters in the master, using tightness criterion evaluate if the clusters can be merged
+//     }
 
-    if (rank == MASTER) {
-        // print the results
-        PlotResults(clusters, retainedSet, compressedSets);
+//     if (rank == MASTER) {
+//         // print the results
+//         PlotResults(clusters, retainedSet, compressedSets);
 
-    }
+//     }
 
-    // free the memory
-    free(clusters);
-    free(retainedSet);
-    free(compressedSets);
+//     // free the memory
+//     free(clusters);
+//     free(retainedSet);
+//     free(compressedSets);
 
-    // free the derived datatype
-    MPI_Type_free(&arrayclusterType);
+//     // free the derived datatype
+//     MPI_Type_free(&arrayclusterType);
 
-    // Finalize the MPI environment
-    MPI_Finalize();
-    return 0;
-}
+//     // Finalize the MPI environment
+//     MPI_Finalize();
+//     return 0;
+// }

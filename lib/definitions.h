@@ -26,6 +26,7 @@
 
 # define MASTER 0
 # define NUMBER_OF_THREADS 4
-# define DATA_BUFFER_SIZE 250 // equal to serial's MAX_SIZE_OF_BUFFER / NUMBER_OF_THREADS
+# define DATA_BUFFER_SIZE 250            // equal to serial's MAX_SIZE_OF_BUFFER / NUMBER_OF_THREADS
+# define UPPER_BOUND_ITERATIONS 200     // equal to serial's UPPER_BOUND_ITERATIONS
 
 #endif

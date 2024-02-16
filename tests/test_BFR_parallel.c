@@ -1,10 +1,5 @@
-#include <stdio.h>
-#include <mpi.h>
-#include <omp.h>
 #include "../src/BFR_parallel.h"
 #include <time.h>
-
-#define UPPER_BOUND_ITERATIONS 200
 
 
     
