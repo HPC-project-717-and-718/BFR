@@ -3,7 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
-#include "../lib/kmeans_wrapper/kmeans_wrapper.h"
+#include "../lib/bfr_helper_functions/bfr_helper_functions.h"
 
 
 // TODO: Add the necessary declarations for the parallel version of the BFR algorithm

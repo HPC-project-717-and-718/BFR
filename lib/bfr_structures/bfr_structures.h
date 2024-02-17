@@ -61,6 +61,8 @@ void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclu
 data_streamer data_streamer_Init(char * file_name, char * mode);
 // void add_compressedset(CompressedSets * C, CompressedSet C1, bool * cset_validity);
 // void remove_compressedset(CompressedSets * C, int i, int j, bool * cset_validity);
+
+void add_miniclusters_to_compressedsets(CompressedSets * C, Cluster * miniclusters, int number_of_miniclusters);
 CompressedSet merge_compressedsets(CompressedSet C1, CompressedSet C2);
 bool tightness_evaluation_cset(CompressedSet C);
 

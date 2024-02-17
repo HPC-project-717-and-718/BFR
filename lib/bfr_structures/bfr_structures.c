@@ -309,7 +309,7 @@ void update_centroids(Cluster ** clusters, int number_of_clusters){
 void add_miniclusters_to_compressedsets(CompressedSets * C, Cluster * miniclusters, int number_of_miniclusters){
     int i;
     for (i=0; i<number_of_miniclusters; i++){
-        if (miniclusters[i].size > 1){
+        // if (miniclusters[i].size > 1){
             // add minicluster to compressed sets
             (*C).number_of_sets += 1;
             (*C).sets = realloc(C->sets, C->number_of_sets * sizeof(CompressedSet));
@@ -323,7 +323,7 @@ void add_miniclusters_to_compressedsets(CompressedSets * C, Cluster * minicluste
                 (*C).sets[C->number_of_sets - 1].sum[j] = miniclusters[i].sum[j];
                 (*C).sets[C->number_of_sets - 1].sum_square[j] = miniclusters[i].sum_squares[j];
             }
-        }
+        // }
     }
 }
 

@@ -1,4 +1,4 @@
-#include "kmeans_wrapper.h"
+#include "bfr_helper_functions.h"
 
 
 double mahalanobis_distance(Cluster c, Point p){
@@ -322,4 +322,45 @@ Cluster * cluster_retained_set(RetainedSet * R, int * k){
     update_centroids(&miniclusters, (*k));
     
     return miniclusters;
+}
+
+bool load_data_buffer(data_streamer stream_cursor, Point * data_buffer, int max_size_of_buffer, long * size_of_data_buffer){
+    if (stream_cursor == NULL){
+        printf("Error: invalid stream cursor\n");
+        exit(1);
+    }
+    
+    // fills data_buffer with MAX_SIZE_OF_BUFFER points or until EOF is reached
+    int i, j, counter = 0, return_val;
+    float x;
+    
+    if(DEBUG) printf("  Reading points.\n");
+    for (i = 0; i < MAX_SIZE_OF_BUFFER; i++){
+        Point p;
+        for (j = 0; j < M; j++){
+            return_val = fscanf(stream_cursor, "%f", &x);
+
+            if (return_val == EOF && i==0 && j==0) {
+                if(DEBUG) printf("  Buffer is empty, end algorithm.\n");
+                // first iteration of the loops, buffer is empty, end algorithm
+                return true;
+            }
+            else if (return_val == EOF) {
+                if(DEBUG) printf("  Buffer is not empty, end algorithm at the next iteration.\n");
+                *size_of_data_buffer = counter;
+                if(DEBUG) printf("  Data buffer size is %d.\n", counter);
+                // buffer is not empty - do another iteration, end at the next one.
+                return false;
+            }
+
+            p.coords[j] = (double) x;
+            data_buffer[i] = p;
+        }
+        counter++;
+    }
+
+    *size_of_data_buffer = counter;
+    if(DEBUG) printf("  Data buffer size is %d.\n", counter);
+
+    return false;
 }

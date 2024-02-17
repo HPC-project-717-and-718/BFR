@@ -1,4 +1,4 @@
-#include "../lib/kmeans_wrapper/kmeans_wrapper.h"
+#include "../lib/bfr_helper_functions/bfr_helper_functions.h"
 
 void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_buffer){
     /*
@@ -21,7 +21,8 @@ void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_
 
     srand(time(NULL));
     // take one random point from input space
-    int random_index = rand() % size_of_data_buffer;
+    // int random_index = rand() % size_of_data_buffer;
+    int random_index = 0;
     clusters[0].centroid = data_buffer[random_index];
     clusters[0].size = 1;
 
@@ -132,8 +133,6 @@ bool read_point(Point * data_buffer, Point * p, long int size_of_data_buffer, in
     }
 
     //read M coordinates from data buffer
-    //TODO: check if this is the correct way to read from buffer
-    // ---> assuming that the interpretation of the buffer as a static array of point is valid, this should be fixed
     int i = 0;
     for (i = 0; i < M; i++){
         p->coords[i] = (data_buffer[*offset]).coords[i];
@@ -388,55 +387,6 @@ void secondary_compression_criteria(RetainedSet * R, Cluster * clusters, Compres
 
     if(DEBUG) printf("      Freeing miniclusters.\n");
     free(miniclusters);
-
-    // if (C->number_of_sets > 0){
-    //     int size_of_C = C->number_of_sets;
-    //     int j = 0;
-    //     for (j = 0; j < size_of_C; j++){
-    //         // calculate center of set
-    //         Point center;
-    //         int k = 0;
-    //         for (k = 0; k < M; k++){
-    //             center.coords[k] = C->sets[j].sum[k] / C->sets[j].number_of_points;
-    //         }
-    //         if (distance(p, center) < T){
-    //             // add point to set
-    //             C->sets[j].number_of_points += 1;
-    //             int k = 0;
-    //             for (k = 0; k < M; k++){
-    //                 C->sets[j].sum[k] += p.coords[k];
-    //                 C->sets[j].sum_square[k] += pow(p.coords[k], 2);
-    //             }
-    //             break;
-    //         }
-    //     }
-    // }
-    // else{
-    //     // check if point is close to any point in retained set
-    //     //  in this case merge the two points and create a new compressed set
-    //     bool is_close = false;
-    //     int size_of_R = R->number_of_points;
-    //     int j = 0;
-    //     for (j = 0; j < size_of_R; j++){
-    //         if (distance(p, R->points[j]) < T){
-    //             // merge points
-    //             merge_points(&p, &R->points[j], C, R);
-    //             is_close = true;
-    //             break;
-    //         }
-    //     }
-
-    //     if (!is_close){
-    //         // add point to retained set
-    //         (*R).number_of_points += 1;
-    //         (*R).points = realloc(R->points, R->number_of_points * sizeof(Point));
-    //         if (R->points == NULL){
-    //             printf("Error: could not allocate memory\n");
-    //             exit(1);
-    //         }
-    //         (*R).points[R->number_of_points - 1] = p;
-    //     }
-    // }
 }
 
 void stream_data(RetainedSet * R, Cluster * clusters, CompressedSets * C, Point * data_buffer, long int size_of_data_buffer){
@@ -479,60 +429,6 @@ void stream_data(RetainedSet * R, Cluster * clusters, CompressedSets * C, Point 
     if(DEBUG) printf("  Checking secondary compression criteria.\n");
     // apply secondary compression criteria over retained set and compressed sets
     secondary_compression_criteria(R, clusters, C);
-}
-
-bool load_data_buffer(data_streamer stream_cursor, Point * data_buffer, int max_size_of_buffer, long * size_of_data_buffer){
-    if (stream_cursor == NULL){
-        printf("Error: invalid stream cursor\n");
-        exit(1);
-    }
-
-    // if ((void*)data_buffer == NULL){
-    //     data_buffer = (Point *)malloc(max_size_of_buffer * sizeof(Point));
-    //     if ((void*)data_buffer == NULL){
-    //         printf("Error: could not allocate memory\n");
-    //         return false;
-    //     }
-    // }
-    
-    // fills data_buffer with MAX_SIZE_OF_BUFFER points or until EOF is reached
-    int i, j, counter = 0, return_val;
-    float x;
-    
-    if(DEBUG) printf("  Reading points.\n");
-    for (i = 0; i < MAX_SIZE_OF_BUFFER; i++){
-        Point p;
-        for (j = 0; j < M; j++){
-            return_val = fscanf(stream_cursor, "%f", &x);
-
-            if (return_val == EOF && i==0 && j==0) {
-                if(DEBUG) printf("  Buffer is empty, end algorithm.\n");
-                // first iteration of the loops, buffer is empty, end algorithm
-                return true;
-            }
-            else if (return_val == EOF) {
-                if(DEBUG) printf("  Buffer is not empty, end algorithm at the next iteration.\n");
-                // buffer is not empty - do another iteration, end at the next one.
-                return false;
-            }
-
-            p.coords[j] = (double) x;
-            data_buffer[i] = p;
-        }
-        counter++;
-    }
-
-    *size_of_data_buffer = counter;
-    if(DEBUG) printf("  Data buffer size is %d.\n", counter);
-    // *size_of_data_buffer = fread(*data_buffer, 1, max_size_of_buffer, stream_cursor);
-    // if (*size_of_data_buffer == 0){
-    //     return true;
-    // }
-
-    //TODO: check if the size of data respect the point format: n floats separated by space
-    // ---> now data should be read regardless of format
-
-    return false;
 }
 
 int main(int argc, char ** argv){

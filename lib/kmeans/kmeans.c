@@ -256,9 +256,6 @@ update_means_parallel(kmeans_config *config)
     		}
 			// printf("\n%d: New coords are: %lf %lf.\n", config->rank, pointArray->coords[0], pointArray->coords[1]);
 		}
-		else {			
-			// printf("\n%d: Sending coordinates: %lf %lf.\n", config->rank, coords_ptr[0], coords_ptr[1]);
-		}
 	}
 }
 
