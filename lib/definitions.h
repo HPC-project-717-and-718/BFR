@@ -21,11 +21,11 @@
 #define data_streamer FILE *                    // data streamer type
 #define BETA 4                                  // beta parameter for BFR algorithm
 
-#define KMEANS_THREADED                         // comment out for serial version
+// #define KMEANS_THREADED                         // comment out for serial version
 
 # define MASTER 0
 # define NUMBER_OF_THREADS 4
-# define DATA_BUFFER_SIZE 250                   // equal to serial's MAX_SIZE_OF_BUFFER / NUMBER_OF_THREADS
+# define DATA_BUFFER_SIZE 1000                   // equal to serial's MAX_SIZE_OF_BUFFER / NUMBER_OF_THREADS
 # define MIN_DATA_BUFFER_SIZE_LAST_ROUND 50     // minimum number of points per node at the last round
 # define UPPER_BOUND_ITERATIONS 200             // equal to serial's UPPER_BOUND_ITERATIONS
 

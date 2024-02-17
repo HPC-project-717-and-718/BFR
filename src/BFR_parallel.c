@@ -900,9 +900,9 @@ int main(int argc, char** argv) {
                 if (points_per_node < MIN_DATA_BUFFER_SIZE_LAST_ROUND) {
                     points_per_node = MIN_DATA_BUFFER_SIZE_LAST_ROUND;
                 }
-                if (points_per_node > DATA_BUFFER_SIZE) {
-                    points_per_node = DATA_BUFFER_SIZE;
-                }
+                // if (points_per_node > DATA_BUFFER_SIZE) {
+                //     points_per_node = DATA_BUFFER_SIZE;
+                // }
                 long points_per_node_all = points_per_node;
                 
                 if(DEBUG) printf("Setting own number of points and initializing own data point buffer.\n");
@@ -1104,10 +1104,13 @@ int main(int argc, char** argv) {
                 for (; i < size; i++) {
                     if(DEBUG) printf("Receiving Retained Set from node %d.\n", i);
                     MPI_Recv(&(tempRetainedSet->number_of_points), 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    tempRetainedSet->points = (Point *)malloc(tempRetainedSet->number_of_points * sizeof(Point));
                     MPI_Recv(tempRetainedSet->points, tempRetainedSet->number_of_points, PointType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     // update the retained set with the retained set from the other processes
                     if(DEBUG) printf("Updating Retained Set with the one received from node %d.\n", i);
                     UpdateRetainedSet(retainedSet, tempRetainedSet);
+
+                    free(tempRetainedSet->points);
                 }
 
                 free(tempRetainedSet);
