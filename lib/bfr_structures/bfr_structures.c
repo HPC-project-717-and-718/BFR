@@ -249,6 +249,12 @@ void add_point_to_retained_set(RetainedSet * R, Point p){
         exit(1);
     }
     (*R).points[R->number_of_points - 1] = p;
+    int i = 0;
+    printf("Added point");
+    for (i = 0; i < M; i++){
+        printf(" %lf", p.coords[i]);
+    }
+    printf(" to RetainedSet.\n");
 }
 
 void update_cluster(Cluster * cluster, Point p){

@@ -311,7 +311,7 @@ kmeans(kmeans_config *config)
 		memcpy(clusters_last, config->clusters, clusters_sz);
 
 #ifdef KMEANS_THREADED
-		if(config->parallel && config->num_objs > config->size){
+		if(config->parallel && config->num_objs > config->size && config->size > 1){
 			// printf("\n%d: In parallel, updating r.\n", config->rank);
 			/* At this point, all nodes have the same config. Have master coordinate the clustering, then broadcast the results. */
 			update_r_parallel(config);

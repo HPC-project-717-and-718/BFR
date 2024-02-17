@@ -10,12 +10,13 @@ bool UpdateCentroidsMultithr(Cluster *clusters, int index, int number_of_cluster
 
     // the function has the same structure of the serial version but in multithreaded version
     int i, j;
-    # pragma omp parallel for shared(clusters, index, number_of_clusters, dimension) private(j)
-    for (i = 0; i < number_of_clusters; i++) {
-        for (j = 0; j < dimension; j++) {
-            clusters[index].centroid.coords[j] = clusters[i].sum[j] / clusters[i].size;
-        }
+    // printf("New coords:");
+    # pragma omp parallel for shared(clusters, index, number_of_clusters, dimension)
+    for (j = 0; j < dimension; j++) {
+        clusters[index].centroid.coords[j] = clusters[index].sum[j] / clusters[index].size;
+        // printf(" %lf", clusters[index].centroid.coords[j]);    
     }
+    // printf("\n");
 
     flag_error = true;
     return flag_error;
@@ -36,6 +37,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int number_of_c
     //set the index of the cluster
     for(i = 0; i < number_of_clusters; i++) {
         clusters[i].index = i;
+        clusters[i].size = 1;
     }
 
     Point centroids[number_of_clusters];
@@ -436,18 +438,15 @@ void StreamPoints(Cluster *clusters, CompressedSets *compressedSets, RetainedSet
     // for each point in the data buffer
     // TODO: revise this part of the code
     Point p;
-    int offset;
-
+    int offset = 0;
+    if(DEBUG) printf("  Offset: %d\n", offset);
     // # pragma omp parallel for private(p) shared(data_buffer, clusters, retainedSet) //reduction(+:offset)
-    for (offset = 0; offset < size; offset++) {
-        if(read_point(data_buffer, &p, size, &offset)==0) {
-            if (!primary_compression_criteria(clusters, p)) {
-                // this function is the same of the serial version, can be found in "bfr_structure.h"
-                add_point_to_retained_set(retainedSet, p);
-            }
-        }else {
-            // break;
-            continue;
+    while(read_point(data_buffer, &p, size, &offset)) {
+        if(DEBUG) printf("  Checking primary compression criteria.\n");
+        if (!primary_compression_criteria(clusters, p)) {
+            // this function is the same of the serial version, can be found in "bfr_structure.h"
+            if(DEBUG) printf("  Adding point to RetainedSet.\n");
+            add_point_to_retained_set(retainedSet, p);
         }
     }
 }
@@ -780,9 +779,9 @@ void defineArrayclusterType(MPI_Datatype *ArrayclusterType, MPI_Datatype PointTy
 
     displacements[0] = MPI_Aint_diff(displacements[0], base_address);
     displacements[1] = MPI_Aint_diff(displacements[1], base_address);
-    displacements[2] = MPI_Aint_diff(displacements[1], base_address);
-    displacements[3] = MPI_Aint_diff(displacements[1], base_address);
-    displacements[4] = MPI_Aint_diff(displacements[1], base_address);
+    displacements[2] = MPI_Aint_diff(displacements[2], base_address);
+    displacements[3] = MPI_Aint_diff(displacements[3], base_address);
+    displacements[4] = MPI_Aint_diff(displacements[4], base_address);
  
 
     MPI_Datatype types[5] = {PointType, MPI_INT, MPI_DOUBLE, MPI_DOUBLE, MPI_INT};
@@ -845,7 +844,7 @@ int main(int argc, char** argv) {
     }
 
     //initialize the clusters the retained set and the compressed sets
-    Cluster *clusters = NULL;
+    Cluster *clusters = (Cluster *)malloc(K * sizeof(Cluster));
     RetainedSet retainedSet_normal = (init_retained_set());
     CompressedSets compressedSets_normal = (init_compressed_sets());
     RetainedSet *retainedSet = &retainedSet_normal;
@@ -895,19 +894,31 @@ int main(int argc, char** argv) {
             
             if(DEBUG) printf("Stop criteria is %d.\n", stop_criteria);
             if (!stop_criteria) {
+                if(DEBUG) printf("Computing points per node.\n");
                 // pass the correct number of points to each node
                 long points_per_node = size_of_data_buffer/size;
                 if (points_per_node < MIN_DATA_BUFFER_SIZE_LAST_ROUND) {
                     points_per_node = MIN_DATA_BUFFER_SIZE_LAST_ROUND;
                 }
+                if (points_per_node > DATA_BUFFER_SIZE) {
+                    points_per_node = DATA_BUFFER_SIZE;
+                }
                 long points_per_node_all = points_per_node;
                 
-                // set own number of data points to parse
+                if(DEBUG) printf("Setting own number of points and initializing own data point buffer.\n");
+                // set own number of data points to parse and initialize point buffer
                 node_data_buffer_size = points_per_node;
                 if (size_of_data_buffer - points_per_node < 0) {
                     node_data_buffer_size = size_of_data_buffer;
                 }
 
+                if(DEBUG) printf("Own number of points is %d, DATA_BUFFER_SIZE is %d.\n", node_data_buffer_size, DATA_BUFFER_SIZE);
+                // copy values from master buffer to master's data buffer
+                int l;
+                for (l = 0; l < node_data_buffer_size; l++) {
+                    data_buffer[l] = data_buffer_master[l];
+                }
+                
                 size_of_data_buffer -= points_per_node;
                 
                 if(DEBUG) printf("Computing points to assign to each node. Points per node: %d, data buffer size: %d.\n", points_per_node, node_data_buffer_size);
@@ -973,22 +984,30 @@ int main(int argc, char** argv) {
 
         if (!stop_criteria) {
 
-            if(DEBUG) printf("Starting round %d.\n", round);
+            if(DEBUG) printf("\n%d: Starting round %d.\n", rank, round);
             if (round == 0) {
                 // init of the clusters made by the master
                 if (rank == MASTER) {
+                    if(DEBUG) printf("Initializing clusters and centroids.\n");
+                    // free clusters as they will be reinitialized in initClustersWithCentroids()
+                    free(clusters);
                     // init the clusters with the centroids
                     // can be done as multithreaded version
                     // as reference to implement see take_k_centorids() in serial version
                     // use the whole first buffer to ensure that results are equal to serial version
                     clusters = initClustersWithCentroids(data_buffer_master, size_of_data_buffer_copy, K, M);
 
+                    // print_clusters(clusters);
+
+                    if(DEBUG) printf("Sending clusters info to other nodes.\n");
                     int i;        
                     for (i = 1; i < size; i++) {
                         //TODO: adjust this send and next receive
+                        if(DEBUG) printf("Sending clusters info to node %d.\n", i);
                         MPI_Send(clusters, K, ArrayclusterType, i, 0, MPI_COMM_WORLD);
                     }
                 } else {
+                    if(DEBUG) printf("\n%d: Receiving clusters info from MASTER.\n", rank);
                     // receive the clusters from the master
                     MPI_Recv(clusters, K, ArrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 }
@@ -1083,9 +1102,11 @@ int main(int argc, char** argv) {
 
                 int i = 1;
                 for (; i < size; i++) {
+                    if(DEBUG) printf("Receiving Retained Set from node %d.\n", i);
                     MPI_Recv(&(tempRetainedSet->number_of_points), 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     MPI_Recv(tempRetainedSet->points, tempRetainedSet->number_of_points, PointType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     // update the retained set with the retained set from the other processes
+                    if(DEBUG) printf("Updating Retained Set with the one received from node %d.\n", i);
                     UpdateRetainedSet(retainedSet, tempRetainedSet);
                 }
 

@@ -26,11 +26,12 @@ double mahalanobis_distance(Cluster c, Point p){
         sum = sum + (sum_partial / variance);
         // sum += pow(( (p.coords[i] - c.centroid.coords[i]) / standard_deviation ), 2);
         // I was almost going crazy with this part lol
+        // if(DEBUG) printf("\n");
         // if(DEBUG) printf("      Partial2: %lf, Partial1: %lf\n", (c.sum_squares[i] / c.size), pow((c.sum[i] / c.size), 2));
         // if(DEBUG) printf("      SUMSQ: %lf, SUM: %lf, N: %d.\n", c.sum_squares[i], c.sum[i], c.size);
-        // if(DEBUG) printf("      P.coords: %lf, Centroid.coords: %lf.\n", p.coords[i], c.centroid.coords[i]);
+        // if(DEBUG) printf("      P.coords: %lf.\n", p.coords[i]);
+        // if(DEBUG) printf("      Centroid.coords: %lf.\n", c.centroid.coords[i]);
         // if(DEBUG) printf("      Variance: %lf, Deviation: %lf, sum: %lf.\n", variance, standard_deviation, sum);
-        // if(DEBUG) printf("\n");
     }
     sum = sqrt(sum);
 
@@ -165,7 +166,7 @@ kmeans_config init_kmeans_config(int k, RetainedSet * R, bool parallel, int rank
 		/* Pointers to the randomly picked point */
         
 		// config.centers[i] = &((*R).points[r]);
-		config.centers[i] = 0;  // just set means to 0, we need the algorithm to be deterministic
+		config.centers[i] = &((*R).points[i]);  // just set centers to i-th point of R, we need the algorithm to be deterministic
 	}
 
     return config;
