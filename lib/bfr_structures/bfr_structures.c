@@ -188,14 +188,14 @@ void print_compressedsets(CompressedSets C){
         printf("Set %d sum: ", i);
         int j = 0;
         for (j = 0; j < M; j++){
-            printf("%d ", C.sets[i].sum[j]);
+            printf("%lf ", C.sets[i].sum[j]);
         }
         printf("\n");
 
         printf("Set %d sum_squares: ", i);
         j = 0;
         for (j = 0; j < M; j++){
-            printf("%d ", C.sets[i].sum_square[j]);
+            printf("%lf ", C.sets[i].sum_square[j]);
         }
         printf("\n");
     }
@@ -249,12 +249,12 @@ void add_point_to_retained_set(RetainedSet * R, Point p){
         exit(1);
     }
     (*R).points[R->number_of_points - 1] = p;
-    int i = 0;
-    printf("Added point");
-    for (i = 0; i < M; i++){
-        printf(" %lf", p.coords[i]);
-    }
-    printf(" to RetainedSet.\n");
+    // int i = 0;
+    // printf("Added point");
+    // for (i = 0; i < M; i++){
+    //     printf(" %lf", p.coords[i]);
+    // }
+    // printf(" to RetainedSet.\n");
 }
 
 void update_cluster(Cluster * cluster, Point p){
