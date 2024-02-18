@@ -109,6 +109,10 @@ CompressedSet *merge_cset(CompressedSet *c1, CompressedSet *c2) {
         new_cset -> sum_square[i] = c1 -> sum_square[i] + c2 -> sum_square[i];
     }
 
+    if (DEBUG){
+        printf("created new cset with %d points\n", new_cset->number_of_points);
+    }
+
     return new_cset;
 }
 
@@ -471,11 +475,15 @@ void PlotResults(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *co
     // TODO: consider printing the results in a file
 }
 
-void remove_cset_from_compressed_sets(CompressedSets *C, CompressedSet * c, int index) {
-    C->number_of_sets -= 1;
+CompressedSets * remove_cset_from_compressed_sets(CompressedSets *C, CompressedSet * c, int index) {
+    if (DEBUG){printf("try to delete cset %d \n", index);};
+
+    
     // ALERT: c'era già una funzione per inizializzare i compressed sets, staticamente. Quindi visto che questi son dichiarati dinamicamente prevedo che delle free falliscano
     CompressedSets temp_pointer = init_compressed_sets();
-    CompressedSets * temp = &temp_pointer;
+    CompressedSets * temp = (CompressedSets *)malloc(sizeof(CompressedSets));
+    temp->number_of_sets = C-> number_of_sets -1;
+    temp->sets = (CompressedSet *)malloc(temp->number_of_sets*sizeof(CompressedSet));
 
     int i, counter = 0;
     for (i = 0; i < C->number_of_sets; i++) {
@@ -489,10 +497,12 @@ void remove_cset_from_compressed_sets(CompressedSets *C, CompressedSet * c, int 
         counter++;
     }
 
+    if (DEBUG){printf("new temp csets created with %d sets \n", temp->number_of_sets);};
+
     free(C->sets);
     free(C);
 
-    C = temp;
+    return temp;
 }
 
 double dist_cset(CompressedSet c1, CompressedSet c2){
@@ -778,7 +788,7 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
         int i, j;
         # pragma omp parallel for shared(distance_matrix, min_distance, min_i, min_j) private(j)
         for (i = start; i < start + number_of_sets; i++) {
-            for (j = i; j < C->number_of_sets; j++) {
+            for (j = i + 1; j < C->number_of_sets; j++) {
                 # pragma omp critical
                 if (distance_matrix[i][j] < min_distance) {
                     min_distance = distance_matrix[i][j];
@@ -790,7 +800,7 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
 
         // the master process gets the minimum distance from the other processes
         if (rank == MASTER) {
-            float temp_min_distance;
+            double temp_min_distance;
             int temp_min_i, temp_min_j;
 
             for (i = 1; i < size; i++) {
@@ -809,13 +819,21 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
             MPI_Send(&min_i, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
             MPI_Send(&min_j, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
         }
+
+        MPI_Bcast(&min_distance, 1, MPI_DOUBLE, MASTER,  MPI_COMM_WORLD);
+        MPI_Bcast(&min_i, 1, MPI_INT, MASTER,  MPI_COMM_WORLD);
+        MPI_Bcast(&min_j, 1, MPI_INT, MASTER,  MPI_COMM_WORLD);
+
+        if(DEBUG){
+            MPI_Barrier(MPI_COMM_WORLD);
+            printf("minimum distance is %lf between cset %d and cset %d\n\n", min_distance, min_i, min_j);
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
         
         if (min_distance >= DBL_MAX - 100. || iterations > UPPER_BOUND_ITERATIONS) {
             stop_criteria = true;
             break;
         }
-
-        CompressedSet * new_cset = (CompressedSet *)malloc(sizeof(CompressedSet));
         // 4. merge the two compressed set with the minimum distance in the master
         // if (rank == MASTER){
         //     new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
@@ -881,8 +899,24 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
         //         distance_matrix[min_j][min_i] = FLT_MAX;
         //     }
         // }
+        CompressedSet * new_cset = (CompressedSet *)malloc(sizeof(CompressedSet));
+        new_cset->number_of_points = 0;
+        if (rank == MASTER){
+            new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
+        }
 
-        new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
+        MPI_Bcast(&(new_cset->number_of_points), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+        MPI_Bcast(&(new_cset->sum), M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+        MPI_Bcast(&(new_cset->sum_square), M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+        
+
+        if (DEBUG){
+            MPI_Barrier(MPI_COMM_WORLD);
+            // for (i = 0; i<M; i++){
+            //     printf("node %d cset coord sum %lf coord sum_squared %lf\n",rank, new_cset->sum[i], new_cset->sum_square[i]);
+            // }
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
 
         // 5. check the tightness of the new cluster
         if (tightness_evaluation_cset(*new_cset)) {
@@ -891,15 +925,43 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
             *temp = *new_cset;
 
             add_cset_to_compressed_sets(C, temp);
+
+            if (DEBUG){
+                MPI_Barrier(MPI_COMM_WORLD);
+                printf("cset successfully added\n");
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
             // 7. remove the two clusters from the compressed sets
-            remove_cset_from_compressed_sets(C, &C->sets[min_i], min_i);
-            remove_cset_from_compressed_sets(C, &C->sets[min_j], min_j);
+            C = remove_cset_from_compressed_sets(C, &C->sets[min_i], min_i);
+            if (DEBUG){
+
+            }
+            C = remove_cset_from_compressed_sets(C, &C->sets[min_j], min_j);
+
+            if (DEBUG){
+                MPI_Barrier(MPI_COMM_WORLD);
+                printf("cset successfully removed\n");
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
             changes = true;
+
         }else{
             distance_matrix[min_i][min_j] = DBL_MAX;
             distance_matrix[min_j][min_i] = DBL_MAX;
         }
 
+        free(new_cset);
+
+        if (C->number_of_sets < K3){
+            stop_criteria =true;
+            break;
+        }
+
+        if (DEBUG){
+                MPI_Barrier(MPI_COMM_WORLD);
+                printf("Iteration %d performed, we will continue\n", iterations);
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
         iterations++;
     }
     
@@ -1300,11 +1362,11 @@ secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size
 
 // TODO: filtering of cluster in the master by tightness criterion
 
-            // TODO: merge the clusters in the compressed sets in the master
+// TODO: merge the clusters in the compressed sets in the master
 
-            // TODO: perform the hierachical clustering in parallel version
+// TODO: perform the hierachical clustering in parallel version
 
-            hierachical_clust_parallel(compressedSets, rank, size);
+hierachical_clust_parallel(compressedSets, rank, size);
 
 
 // TODO: synchronize the processes

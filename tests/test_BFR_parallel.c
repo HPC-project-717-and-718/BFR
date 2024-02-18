@@ -77,9 +77,18 @@
 void test_hierchical_clustering_par(bool debug, int rank, int size){
     int DIM = 10;
     // Create a sample CompressedSets object
+    CompressedSets C_st;
     CompressedSets *C = (CompressedSets *)malloc(sizeof(CompressedSets));
     // Initialize C with some values
     C -> number_of_sets = 10;
+
+     
+    if (DEBUG){
+        MPI_Barrier(MPI_COMM_WORLD);
+        printf("initialization on node %d, with %d sets\n", rank, C->number_of_sets);
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+
 
     // create 50 compressed sets
     C->sets = (CompressedSet *)malloc(10 * sizeof(CompressedSet));
@@ -119,7 +128,11 @@ void test_hierchical_clustering_par(bool debug, int rank, int size){
 
     // if (rank== MASTER && DEBUG) print_compressedsets(*C);
     
-    if (DEBUG)MPI_Barrier(MPI_COMM_WORLD);
+    if (DEBUG){
+        MPI_Barrier(MPI_COMM_WORLD);
+        printf("starts operations on node %d\n", rank);
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
 
     
     // calculate the time taken by the parallel version
@@ -133,60 +146,69 @@ void test_hierchical_clustering_par(bool debug, int rank, int size){
     hierachical_clust_parallel(C, rank, size);
     end = clock();
 
+    if (DEBUG)MPI_Barrier(MPI_COMM_WORLD);
+
     double time_taken = ((double) (end - start)) / CLOCKS_PER_SEC;
     printf("Time taken by parallel version: %f\n", time_taken);
 
     Cluster *clusters = (Cluster *)malloc(10 * sizeof(Cluster));
 
 
-    // calculate the time taken by the sequential version
-    start = clock();
-    // Call the hierchical_clustering function
-    merge_compressedsets_and_miniclusters(C_copy, clusters, 0);
-    end = clock();
+    if (rank == MASTER){
+        // print the results of the parallel version
+        for (i = 0; i < C->number_of_sets; i++) {
+            printf("Compressed sets %d \n", i);
+            printf("size: %d \n", C->number_of_sets);
+            printf("centroid coordinates: \n");
+            int j;
+            for (j = 0; j < DIM; j++) {
+                double coord = C->sets[i].sum[j]/C->sets[i].number_of_points;
 
-    
-    time_taken = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("Time taken by sequential version: %f\n", time_taken);
-
-    // free C_copy
-    free(C);
-    free(C_copy);
-
-    
-    // Add assertions to verify the correctness of the function
-    
-
-
-
-    // print the results of the parallel version
-    for (i = 0; i < C->number_of_sets; i++) {
-        printf("Compressed sets %d \n", i);
-        printf("size: %d \n", C->number_of_sets);
-        printf("centroid coordinates: \n");
-        int j;
-        for (j = 0; j < DIM; j++) {
-            double coord = C->sets[i].sum[j]/C->sets[i].number_of_points;
-
-            printf("%d ", coord);
+                printf("%lf ", coord);
+            };
+            printf("\n");
         };
-        printf("\n");
-    };
+
+        // calculate the time taken by the sequential version
+        start = clock();
+        // Call the hierchical_clustering function
+        merge_compressedsets_and_miniclusters(C_copy, clusters, 0);
+        end = clock();
+
+        
+        time_taken = ((double) (end - start)) / CLOCKS_PER_SEC;
+        printf("Time taken by sequential version: %f\n", time_taken);
+
+        // free C_copy
+        
+        free(C_copy);
+        free(C);
+        
+        // Add assertions to verify the correctness of the function
+        
 
 
-     // print the results of the parallel version
-    for (i = 0; i < C_copy->number_of_sets; i++) {
-        printf("Compressed sets %d \n", i);
-        printf("size: %d \n", C_copy->number_of_sets);
-        printf("centroid coordinates: \n");
-        int j;
-        for (j = 0; j < DIM; j++) {
-            double coord = C_copy->sets[i].sum[j]/C_copy->sets[i].number_of_points;
 
-            printf("%d ", coord);
+        
+
+
+        // print the results of the parallel version
+        for (i = 0; i < C_copy->number_of_sets; i++) {
+            printf("Compressed sets %d \n", i);
+            printf("size: %d \n", C_copy->number_of_sets);
+            printf("centroid coordinates: \n");
+            int j;
+            for (j = 0; j < DIM; j++) {
+                double coord = C_copy->sets[i].sum[j]/C_copy->sets[i].number_of_points;
+
+                printf("%lf ", coord);
+            };
+            printf("\n");
         };
-        printf("\n");
-    };
+    }else{
+        free(C);
+    }
+    
 }
 
 int main(int argc, char** argv) {   

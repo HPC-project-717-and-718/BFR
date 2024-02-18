@@ -11,7 +11,7 @@ module load mpich-3.2
 module load valgrind-3.15.0 
 # OMP_NUM_THREADS=2 mpirun.actual -n 3 valgrind --track-origins=yes --leak-check=full --verbose HPC/BFR/example2.o > HPC/BFR/output.txt 2>&1 # Full debug setup
 # OMP_NUM_THREADS=2 mpirun.actual -n 3 valgrind HPC/BFR/example2.o > HPC/BFR/output.txt 2>&1 # Debug setup
-OMP_NUM_THREADS=2 mpirun.actual -n 2 CLionProjects/HPC1/BFR/tests/test_BFR_parallel.o
+OMP_NUM_THREADS=2 mpirun.actual -n 8 CLionProjects/HPC1/BFR/tests/test_BFR_parallel.o
 
 # poi esegui "qsub bfr_parallel_test.sh"
 # non eseguire MAI manualmente!!

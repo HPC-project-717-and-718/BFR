@@ -21,6 +21,7 @@
 #define data_streamer FILE *                    // data streamer type
 #define BETA 4                                  // beta parameter for BFR algorithm
 #define DBL_MAX 10000.
+#define K3 3
 
 #define KMEANS_THREADED                         // comment out for serial version
 

@@ -188,14 +188,14 @@ void print_compressedsets(CompressedSets C){
         printf("Set %d sum: ", i);
         int j = 0;
         for (j = 0; j < M; j++){
-            printf("%d ", C.sets[i].sum[j]);
+            printf("%lf ", C.sets[i].sum[j]);
         }
         printf("\n");
 
         printf("Set %d sum_squares: ", i);
         j = 0;
         for (j = 0; j < M; j++){
-            printf("%d ", C.sets[i].sum_square[j]);
+            printf("%lf ", C.sets[i].sum_square[j]);
         }
         printf("\n");
     }
