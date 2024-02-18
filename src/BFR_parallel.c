@@ -154,6 +154,10 @@ CompressedSet *merge_cset(CompressedSet *c1, CompressedSet *c2) {
         new_cset -> sum_square[i] = c1 -> sum_square[i] + c2 -> sum_square[i];
     }
 
+    if (DEBUG){
+        printf("created new cset with %d points\n", new_cset->number_of_points);
+    }
+
     return new_cset;
 }
 
@@ -169,77 +173,77 @@ void add_cset_to_compressed_sets(CompressedSets *compressedSets, CompressedSet *
     free(c);
 }
 
-void hierachical_clustering_thr(CompressedSets * C){
-    // TODO: implement this function
-    // hierchieal clustering of the compressed sets
+// void hierachical_clustering_thr(CompressedSets * C){
+//     // TODO: implement this function
+//     // hierchieal clustering of the compressed sets
 
-    bool stop_criteria = false;
-    bool changes = false;
+//     bool stop_criteria = false;
+//     bool changes = false;
 
-    float **distance_matrix =  malloc (sizeof(float *) * C->number_of_sets);
-    int i;
-    for (i = 0; i < C->number_of_sets; i++) {
-        distance_matrix[i] = malloc (sizeof(float) * C->number_of_sets);
-    }
+//     float **distance_matrix =  malloc (sizeof(float *) * C->number_of_sets);
+//     int i;
+//     for (i = 0; i < C->number_of_sets; i++) {
+//         distance_matrix[i] = malloc (sizeof(float) * C->number_of_sets);
+//     }
 
-    while(!stop_criteria){
-        // 1. compute the distance matrix
-        if (changes) {
-            int i, j;
-            # pragma omp parallel for shared(distance_matrix, C) private(j)
-            for (i = 0; i < C->number_of_sets; i++) {
-                for (j = 0; j < C->number_of_sets; j++) {
-                    // TODO: implement distance function
-                    distance_matrix[i][j] = distance((Pointer) & (C->sets[i]), (Pointer) & (C->sets[j]));
-                    distance_matrix[j][i] = distance_matrix[i][j];
-                }
-            }
-        }
+//     while(!stop_criteria){
+//         // 1. compute the distance matrix
+//         if (changes) {
+//             int i, j;
+//             # pragma omp parallel for shared(distance_matrix, C) private(j)
+//             for (i = 0; i < C->number_of_sets; i++) {
+//                 for (j = 0; j < C->number_of_sets; j++) {
+//                     // TODO: implement distance function
+//                     distance_matrix[i][j] = distance((Pointer) & (C->sets[i]), (Pointer) & (C->sets[j]));
+//                     distance_matrix[j][i] = distance_matrix[i][j];
+//                 }
+//             }
+//         }
 
-        // 3. find the minimum distance in the distance matrix
-        float min_distance = FLT_MAX;
-        int min_i, min_j;
+//         // 3. find the minimum distance in the distance matrix
+//         float min_distance = FLT_MAX;
+//         int min_i, min_j;
 
-        int i, j;
-        # pragma omp parallel for shared(distance_matrix, min_distance, min_i, min_j) private(j)
-        for (i = 0; i < C->number_of_sets; i++) {
-            for (j = 0; j < C->number_of_sets; j++) {
-                # pragma omp critical
-                if (distance_matrix[i][j] < min_distance) {
-                    min_distance = distance_matrix[i][j];
-                    min_i = i;
-                    min_j = j;
-                }
-            }
-        }
+//         int i, j;
+//         # pragma omp parallel for shared(distance_matrix, min_distance, min_i, min_j) private(j)
+//         for (i = 0; i < C->number_of_sets; i++) {
+//             for (j = 0; j < C->number_of_sets; j++) {
+//                 # pragma omp critical
+//                 if (distance_matrix[i][j] < min_distance) {
+//                     min_distance = distance_matrix[i][j];
+//                     min_i = i;
+//                     min_j = j;
+//                 }
+//             }
+//         }
 
-        if (min_distance == FLT_MAX) {
-            stop_criteria = true;
-            break;
-        }
+//         if (min_distance == FLT_MAX) {
+//             stop_criteria = true;
+//             break;
+//         }
 
-        // 4. merge the two compressed set with the minimum distance
-        CompressedSet * new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
+//         // 4. merge the two compressed set with the minimum distance
+//         CompressedSet * new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
 
-        // 5. check the tightness of the new cluster
-        if (tightness_evaluation_cset(*new_cset)) {
-            // 6. add the new cluster to the compressed sets
-            add_cset_to_compressed_sets(C, new_cset);
-            // 7. remove the two clusters from the compressed sets
-            remove_cset_from_compressed_sets(C, &(C->sets[min_i]), min_i);
-            remove_cset_from_compressed_sets(C, &(C->sets[min_j]), min_j);
-            changes = true;
-        } else {
-            // 8. set the distance between the two clusters to infinity
-            distance_matrix[min_i][min_j] = FLT_MAX;
-            distance_matrix[min_j][min_i] = FLT_MAX;
-            changes = false;
+//         // 5. check the tightness of the new cluster
+//         if (tightness_evaluation_cset(*new_cset)) {
+//             // 6. add the new cluster to the compressed sets
+//             add_cset_to_compressed_sets(C, new_cset);
+//             // 7. remove the two clusters from the compressed sets
+//             remove_cset_from_compressed_sets(C, &(C->sets[min_i]), min_i);
+//             remove_cset_from_compressed_sets(C, &(C->sets[min_j]), min_j);
+//             changes = true;
+//         } else {
+//             // 8. set the distance between the two clusters to infinity
+//             distance_matrix[min_i][min_j] = FLT_MAX;
+//             distance_matrix[min_j][min_i] = FLT_MAX;
+//             changes = false;
 
-            free(new_cset);
-        }
+//             free(new_cset);
+//         }
 
-    }
-}
+//     }
+// }
 
 bool primary_compression_criteria(Cluster *clusters, Cluster *clusters_copy, Point p) {
     // function copied from the serial version
@@ -314,7 +318,7 @@ Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size, M
     // we may want to run kmeans when we have more than k*constant number of points
     if((*R).number_of_points < (*k)){
         if(DEBUG && rank == MASTER) printf("          Retained set has less points (%d) than clusters(%d). Returning empty miniclusters.\n", (*R).number_of_points, (*k));
-        return miniclusters;
+                return miniclusters;
     }
 
     kmeans_config config = init_kmeans_config((*k), R, true, rank, size);
@@ -420,10 +424,22 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
 
     // 1. cluster retained set R with classical K-Means, creating k2 clusters, also keep in R the outlayers
     // TODO: implement the function K-Means with open mp
+    if (DEBUG){
+        // printf("I'm node %d and I'm waiting to start kmeans\n", rank);
+        // MPI_Barrier(MPI_COMM_WORLD);
+        // printf("start of kmeans node %d\n\n\n", rank);
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
     int k2 = K;
     Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, &k2, rank, size, PointType);
 
     // TODO: consider parallelizing this
+    if (DEBUG){
+        printf("I'm node %d and I'm waiting the other finishing kmeans\n", rank);
+        MPI_Barrier(MPI_COMM_WORLD);
+        printf("start of filtering of compressed sets node %d\n\n\n", rank);
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
     add_miniclusters_to_compressedsets(compressedSets, k2_clusters, k2);
     
     free(k2_clusters);
@@ -507,11 +523,15 @@ void PlotResults(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *co
     // TODO: consider printing the results in a file
 }
 
-void remove_cset_from_compressed_sets(CompressedSets *C, CompressedSet * c, int index) {
-    C->number_of_sets -= 1;
+CompressedSets * remove_cset_from_compressed_sets(CompressedSets *C, CompressedSet * c, int index) {
+    if (DEBUG){printf("try to delete cset %d \n", index);};
+
+    
     // ALERT: c'era già una funzione per inizializzare i compressed sets, staticamente. Quindi visto che questi son dichiarati dinamicamente prevedo che delle free falliscano
     CompressedSets temp_pointer = init_compressed_sets();
-    CompressedSets * temp = &temp_pointer;
+    CompressedSets * temp = (CompressedSets *)malloc(sizeof(CompressedSets));
+    temp->number_of_sets = C-> number_of_sets -1;
+    temp->sets = (CompressedSet *)malloc(temp->number_of_sets*sizeof(CompressedSet));
 
     int i, counter = 0;
     for (i = 0; i < C->number_of_sets; i++) {
@@ -525,10 +545,52 @@ void remove_cset_from_compressed_sets(CompressedSets *C, CompressedSet * c, int 
         counter++;
     }
 
+    if (DEBUG){printf("new temp csets created with %d sets \n", temp->number_of_sets);};
+
     free(C->sets);
     free(C);
 
-    C = temp;
+    return temp;
+}
+
+double dist_cset(CompressedSet c1, CompressedSet c2){
+    // calculate the two centroids coordinates
+    double * coord_c1 = malloc(M * sizeof(double));
+    double * coord_c2 = malloc(M * sizeof(double));
+    int i;
+
+    // calculate centroid for c1
+    // if (DEBUG) printf("coords c1\n");
+    for (i = 0; i < M; i++) {
+        coord_c1[i] = (double)c1.sum[i] / c1.number_of_points;
+        // if(DEBUG) printf("coord: %lf\n", coord_c1[i]);
+    }
+
+    // calculate centroid for c2
+    // if (DEBUG) printf("coords c2\n");
+    for (i = 0; i < M; i++) {
+        coord_c2[i] = (double)c2.sum[i] / c2.number_of_points;
+        // if(DEBUG) printf("coord: %lf\n", coord_c1[i]);
+    }
+
+    
+    //if (DEBUG) printf("checkpoint 1\n");
+    // calculate the distance between the two centroids
+    double distance = 0.;
+    for (i = 0; i < M; i++) {
+        //if (DEBUG) printf("checkpoint 1.3\n");
+        distance += pow(coord_c1[i] - coord_c2[i], 2);
+        //if (DEBUG) printf("checkpoint 1.5\n");
+    }
+    distance = sqrt(distance);
+    if (DEBUG) printf("checkpoint 1.7 distance %lf\n", distance);
+    // free the allocated memory
+    free(coord_c1);
+    free(coord_c2);
+
+    //if (DEBUG) printf("checkpoint 2\n");
+
+    return distance;
 }
 
 bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
@@ -553,14 +615,16 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
     *   - void
     */
     // initialize the distance matrix
-    float **distance_matrix =  malloc (sizeof(float *) * C->number_of_sets);
+   
+    double **distance_matrix =  malloc (sizeof(double *) * C->number_of_sets);
     int i;
     for (i = 0; i < C->number_of_sets; i++) {
-        distance_matrix[i] = malloc (sizeof(float) * C->number_of_sets);
+        distance_matrix[i] = malloc (sizeof(double) * C->number_of_sets);
     }
-
+    if (DEBUG)printf("node %d: distance matrix declared\n",rank );
     bool stop_criteria = false;
-    bool changes = false;
+    bool changes = true;
+    bool not_firstr =false;
     int iterations = 0;
 
 
@@ -570,20 +634,33 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
         // 1. compute the distance matrix
         if (changes) {
             // free the distance matrix
-            for (i = 0; i < C->number_of_sets; i++) {
-                free(distance_matrix[i]);
+            if (not_firstr){
+                for (i = 0; i < C->number_of_sets; i++) {
+                    if (distance_matrix[i] != NULL) free(distance_matrix[i]);
+                }
+                if (distance_matrix != NULL)free(distance_matrix);
+                not_firstr = true;
             }
-            free(distance_matrix);
+            
 
-            distance_matrix =  malloc (sizeof(float *) * C->number_of_sets);
+            if (DEBUG)printf("Node %d erased the distance matrix\n", rank);
+
+            distance_matrix =  malloc (sizeof(double *) * C->number_of_sets);
 
             for (i = 0; i < C->number_of_sets; i++) {
-                distance_matrix[i] = malloc (sizeof(float) * C->number_of_sets);
+                distance_matrix[i] = malloc (sizeof(double) * C->number_of_sets);
+                int p;
+                for (p=0; p< C->number_of_sets;p++){
+                    distance_matrix[i][p]=DBL_MAX;
+                }
             }
+            if (DEBUG)printf("Node %d reinitiallized the distance matrix\n", rank);
 
+            if (DEBUG) MPI_Barrier(MPI_COMM_WORLD);
             if (size < C->number_of_sets ){
                 // case where at least one process has to compute the distance vector more than once
                 number_of_sets = C->number_of_sets / size;
+                int original = number_of_sets;
 
                 if (rank == size - 1){
                     if (number_of_sets * size < C->number_of_sets){
@@ -593,7 +670,12 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
                     }
                 }
 
-                start = rank * number_of_sets; 
+                start = rank * original; 
+
+                if (DEBUG ){
+                    if (rank == MASTER) printf("case 1\n");
+                    printf("node %d will start at sets %d and calculate %d sets\n", rank, start, number_of_sets);
+                }
             }else if (size >= C->number_of_sets){
                 // case where each process has to compute the distance vector only once
                 if (rank > C->number_of_sets){
@@ -601,53 +683,125 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
                     break;
                 }
 
+
                 number_of_sets = 1;
                 start = rank;
+
+                
+                if (DEBUG ){
+                    if (rank == MASTER) printf("case 2\n");
+                    printf("node %d will start at sets %d and calculate %d sets\n", rank, start, number_of_sets);
+                }
+            }
+
+            if (DEBUG){
+                 printf("mode %d starts fill the distance vector\n",rank);
+                MPI_Barrier(MPI_COMM_WORLD);
             }
 
             // for each process compute the distance vectors for the sets assigned
             int i, j;
-            # pragma omp parallel for shared(distance_matrix, C, start, number_of_sets) private(j)
+            // # pragma omp parallel for shared(distance_matrix, C, start, number_of_sets) private(j)
             for (i = start; i < start + number_of_sets; i++) {
-                for (j = i; j < C->number_of_sets; j++) {
-                    distance_matrix[i][j] = distance((Pointer) & (C->sets[i]), (Pointer) & (C->sets[j]));
+                for (j = 0; j < C->number_of_sets; j++) {
+                    double dist = dist_cset(C->sets[i],  C->sets[j]);
+                    if (DEBUG) printf("%lf \n", dist);
+                    if (dist < 0) dist = 0.;
+                    if(dist > DBL_MAX) dist = DBL_MAX;
+                    distance_matrix[i][j] = dist;
                 }
+            }
+
+
+
+            if (DEBUG){
+                printf("distance vectors calculated in node %d \n", rank);
+                MPI_Barrier(MPI_COMM_WORLD);
             }
 
             if (rank == MASTER) {
                 // case where the master has to compute the distance vector for the remaining sets
-                for (i = 1; i < C->number_of_sets; i++) {
+                i = number_of_sets;
+                for (; i < C->number_of_sets; i++) {
                     // the rank of the process that should have computed the distance vector for the set i: i / number_of_points - 1 
                     // if the rank is the master the distance vector is already computed
                     // example: if the number of sets is 10 and the number of processes is 4, the first 3 processes will compute the distance vector for 3 sets, the last process will compute the distance vector for 1 set
                     // sets i would have been computed by the process i / number_of_points - 1, in the example the set 4 would have been computed by the process 1
                     int expected_rank = floor(i / number_of_sets);
-                    MPI_Recv(distance_matrix[i], C->number_of_sets, MPI_FLOAT, expected_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                }
+                    if (expected_rank>=size )expected_rank = size -1;
+                    if (DEBUG) printf("master is waiting of receiving the distance vector %d from process %d\n ", i , expected_rank);
+                    MPI_Recv(distance_matrix[i], C->number_of_sets, MPI_DOUBLE, expected_rank, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-                //fill the upper part of the distance matrix
-                //ALERT: REVISE THIS PART
-                for (i = 0; i < C->number_of_sets; i++) {
-                    for (j = 0; j < i; j++) {
-                        distance_matrix[i][j] = distance_matrix[j][i];
+                    if (DEBUG){
+                        printf("distance matrix received by node %d \n", expected_rank);
+
+                        int oi=0;
+                        for(;oi<C->number_of_sets;oi++){
+                            printf("%lf ",distance_matrix[i][oi] );
+                        }
+                        printf("\n");
                     }
                 }
 
-                //Broadcast the distance matrix to the other processes
-                for(i = 1; i < size; i++) {
-                    MPI_Send(distance_matrix[i], number_of_sets, MPI_FLOAT, i, 0, MPI_COMM_WORLD);
-                }
+                if(DEBUG) printf("received all matrix\n");
+
+
+
+                //fill the upper part of the distance matrix
+                //ALERT: REVISE THIS PART
+                // for (i = 0; i < C->number_of_sets; i++) {
+                //     for (j = 0; j < i; j++) {
+                //         distance_matrix[j][i] = distance_matrix[i][j];
+                //     }
+                // }
+
+
+
+                // if (DEBUG){
+                //     printf("distance matrix in master\n\n");
+                //     for (i = 0; i < C->number_of_sets;i++){
+                //             for (j = 0; j < C->number_of_sets;j++){
+                //             printf("%lf ", distance_matrix[i][j]);
+                //             }
+                //             printf("\n");
+                //     }
+                // }
+
+                // //Broadcast the distance matrix to the other processes
+                // for(i = 1; i < size; i++) {
+                //     MPI_Send(distance_matrix[i], number_of_sets, MPI_FLOAT, i, 0, MPI_COMM_WORLD);
+                // }
             } else {
                 for(i = start; i < start + number_of_sets; i++) {
                     int size_of_dist_vector = C->number_of_sets-i;
-                    MPI_Send(distance_matrix[start], number_of_sets, MPI_FLOAT, MASTER, 0, MPI_COMM_WORLD);
+                    MPI_Send(distance_matrix[i], C->number_of_sets, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD);
                 }
 
-                //Receive the distance matrix from the master
-                for (i = 0; i < C->number_of_sets; i++) {
-                    MPI_Recv(distance_matrix[i], C->number_of_sets, MPI_FLOAT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                //if (DEBUG)printf("node %d sent distance vector\n", rank);
+
+                // //Receive the distance matrix from the master
+                // for (i = 0; i < C->number_of_sets; i++) {
+                //     MPI_Recv(distance_matrix[i], C->number_of_sets, MPI_FLOAT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                // }
+
+                // if (DEBUG) printf("node %d receveid the distance from the master");
+            }  
+            if (DEBUG) MPI_Barrier(MPI_COMM_WORLD);
+
+            //if(DEBUG)printf("checkpoint 1\n");
+            for (i = 0; i < C->number_of_sets;i++){
+                MPI_Bcast(distance_matrix[i], C->number_of_sets, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+            }     
+
+            if (DEBUG && rank == 1){
+                for (i = 0; i < C->number_of_sets;i++){
+                     for (j = 0; j < C->number_of_sets;j++){
+                        printf("%lf ", distance_matrix[i][j]);
+                     }
+                     printf("\n");
                 }
-            }            
+            }
+            if (DEBUG)MPI_Barrier(MPI_COMM_WORLD);
         }
 
         // 3. find the minimum distance in the distance matrix
@@ -676,13 +830,13 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
             start = rank;
         }
 
-        float min_distance = FLT_MAX;
+        double min_distance = DBL_MAX;
         int min_i, min_j;
 
         int i, j;
         # pragma omp parallel for shared(distance_matrix, min_distance, min_i, min_j) private(j)
         for (i = start; i < start + number_of_sets; i++) {
-            for (j = i; j < C->number_of_sets; j++) {
+            for (j = i + 1; j < C->number_of_sets; j++) {
                 # pragma omp critical
                 if (distance_matrix[i][j] < min_distance) {
                     min_distance = distance_matrix[i][j];
@@ -694,11 +848,11 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
 
         // the master process gets the minimum distance from the other processes
         if (rank == MASTER) {
-            float temp_min_distance;
+            double temp_min_distance;
             int temp_min_i, temp_min_j;
 
             for (i = 1; i < size; i++) {
-                MPI_Recv(&temp_min_distance, 1, MPI_FLOAT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_Recv(&temp_min_distance, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 MPI_Recv(&temp_min_i, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 MPI_Recv(&temp_min_j, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
@@ -709,89 +863,162 @@ bool hierachical_clust_parallel(CompressedSets * C, int rank, int size){
                 }
             }
         } else {
-            MPI_Send(&min_distance, 1, MPI_FLOAT, MASTER, 0, MPI_COMM_WORLD);
+            MPI_Send(&min_distance, 1, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD);
             MPI_Send(&min_i, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
             MPI_Send(&min_j, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
         }
+
+        MPI_Bcast(&min_distance, 1, MPI_DOUBLE, MASTER,  MPI_COMM_WORLD);
+        MPI_Bcast(&min_i, 1, MPI_INT, MASTER,  MPI_COMM_WORLD);
+        MPI_Bcast(&min_j, 1, MPI_INT, MASTER,  MPI_COMM_WORLD);
+
+        if(DEBUG){
+            MPI_Barrier(MPI_COMM_WORLD);
+            printf("minimum distance is %lf between cset %d and cset %d\n\n", min_distance, min_i, min_j);
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
         
-        if (min_distance >= FLT_MAX - 100. || iterations > UPPER_BOUND_ITERATIONS) {
+        if (min_distance >= DBL_MAX - 100. || iterations > UPPER_BOUND_ITERATIONS) {
             stop_criteria = true;
             break;
         }
-
-
         // 4. merge the two compressed set with the minimum distance in the master
+        // if (rank == MASTER){
+        //     new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
+
+        //     // 5. check the tightness of the new cluster
+        //     if (tightness_evaluation_cset(*new_cset)) {
+        //         // 6. add the new cluster to the compressed sets
+        //         CompressedSet * temp = (CompressedSet *)malloc(sizeof(CompressedSet));
+        //         *temp = *new_cset;
+
+        //         add_cset_to_compressed_sets(C, temp);
+        //         // 7. remove the two clusters from the compressed sets
+        //         remove_cset_from_compressed_sets(C, &C->sets[min_i], min_i);
+        //         remove_cset_from_compressed_sets(C, &C->sets[min_j], min_j);
+        //         changes = true;
+
+        //         MPI_Bcast(&(new_cset->number_of_points), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+        //         MPI_Bcast(new_cset->sum, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
+        //         MPI_Bcast(new_cset->sum_square, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
+
+        //         free(new_cset);
+        //     } else {
+        //         // 8. set the distance between the two clusters to infinity
+        //         distance_matrix[min_i][min_j] = FLT_MAX;
+        //         distance_matrix[min_j][min_i] = FLT_MAX;
+        //         changes = false;
+
+        //         free(new_cset);
+        //     }
+
+        //     //Broadcast the changes to the other processes
+        //     MPI_Bcast(&changes, 1, MPI_C_BOOL, MASTER, MPI_COMM_WORLD);
+        //     MPI_Bcast(&min_i, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+        //     MPI_Bcast(&min_j, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+        // }else{
+        //     MPI_Recv(&changes, 1, MPI_C_BOOL, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        //     MPI_Recv(&min_i, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        //     MPI_Recv(&min_j, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        //      if (changes) {
+        //         CompressedSet * new_cset = (CompressedSet *)malloc(sizeof(CompressedSet));
+        //         int number_of_points;
+        //         float sum[M], sum_square[M];
+
+        //         MPI_Recv(&number_of_points, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        //         MPI_Recv(sum, M, MPI_FLOAT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        //         MPI_Recv(sum_square, M, MPI_FLOAT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        //         new_cset -> number_of_points = number_of_points;
+        //         int i;
+        //         # pragma omp parallel for shared(new_cset, sum, sum_square)
+        //         for (i = 0; i < M; i++){
+        //             new_cset -> sum[i] = sum[i];
+        //             new_cset -> sum_square[i] = sum_square[i];
+        //         }
+
+        //         add_cset_to_compressed_sets(C, new_cset);
+        //         remove_cset_from_compressed_sets(C, &C->sets[min_i], min_i);
+        //         remove_cset_from_compressed_sets(C, &C->sets[min_j], min_j);
+
+        //     }else{
+        //         distance_matrix[min_i][min_j] = FLT_MAX;
+        //         distance_matrix[min_j][min_i] = FLT_MAX;
+        //     }
+        // }
+        CompressedSet * new_cset = (CompressedSet *)malloc(sizeof(CompressedSet));
+        new_cset->number_of_points = 0;
         if (rank == MASTER){
-            CompressedSet * new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
-
-            // 5. check the tightness of the new cluster
-            if (tightness_evaluation_cset(*new_cset)) {
-                // 6. add the new cluster to the compressed sets
-                CompressedSet * temp = (CompressedSet *)malloc(sizeof(CompressedSet));
-                *temp = *new_cset;
-
-                add_cset_to_compressed_sets(C, temp);
-                // 7. remove the two clusters from the compressed sets
-                remove_cset_from_compressed_sets(C, &C->sets[min_i], min_i);
-                remove_cset_from_compressed_sets(C, &C->sets[min_j], min_j);
-                changes = true;
-
-                MPI_Bcast(&(new_cset->number_of_points), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-                MPI_Bcast(new_cset->sum, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
-                MPI_Bcast(new_cset->sum_square, M, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
-
-                free(new_cset);
-            } else {
-                // 8. set the distance between the two clusters to infinity
-                distance_matrix[min_i][min_j] = FLT_MAX;
-                distance_matrix[min_j][min_i] = FLT_MAX;
-                changes = false;
-
-                free(new_cset);
-            }
-
-            //Broadcast the changes to the other processes
-            MPI_Bcast(&changes, 1, MPI_C_BOOL, MASTER, MPI_COMM_WORLD);
-            MPI_Bcast(&min_i, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-            MPI_Bcast(&min_j, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-        }else{
-            MPI_Recv(&changes, 1, MPI_C_BOOL, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(&min_i, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(&min_j, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-             if (changes) {
-                CompressedSet * new_cset = (CompressedSet *)malloc(sizeof(CompressedSet));
-                int number_of_points;
-                float sum[M], sum_square[M];
-
-                MPI_Recv(&number_of_points, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                MPI_Recv(sum, M, MPI_FLOAT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                MPI_Recv(sum_square, M, MPI_FLOAT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-                new_cset -> number_of_points = number_of_points;
-                int i;
-                # pragma omp parallel for shared(new_cset, sum, sum_square)
-                for (i = 0; i < M; i++){
-                    new_cset -> sum[i] = sum[i];
-                    new_cset -> sum_square[i] = sum_square[i];
-                }
-
-                add_cset_to_compressed_sets(C, new_cset);
-                remove_cset_from_compressed_sets(C, &C->sets[min_i], min_i);
-                remove_cset_from_compressed_sets(C, &C->sets[min_j], min_j);
-
-            }else{
-                distance_matrix[min_i][min_j] = FLT_MAX;
-                distance_matrix[min_j][min_i] = FLT_MAX;
-            }
+            new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
         }
 
+        MPI_Bcast(&(new_cset->number_of_points), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+        MPI_Bcast(&(new_cset->sum), M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+        MPI_Bcast(&(new_cset->sum_square), M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+        
+
+        if (DEBUG){
+            MPI_Barrier(MPI_COMM_WORLD);
+            // for (i = 0; i<M; i++){
+            //     printf("node %d cset coord sum %lf coord sum_squared %lf\n",rank, new_cset->sum[i], new_cset->sum_square[i]);
+            // }
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
+
+        // 5. check the tightness of the new cluster
+        if (tightness_evaluation_cset(*new_cset)) {
+            // 6. add the new cluster to the compressed sets
+            CompressedSet * temp = (CompressedSet *)malloc(sizeof(CompressedSet));
+            *temp = *new_cset;
+
+            add_cset_to_compressed_sets(C, temp);
+
+            if (DEBUG){
+                MPI_Barrier(MPI_COMM_WORLD);
+                printf("cset successfully added\n");
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
+            // 7. remove the two clusters from the compressed sets
+            C = remove_cset_from_compressed_sets(C, &C->sets[min_i], min_i);
+            if (DEBUG){
+
+            }
+            C = remove_cset_from_compressed_sets(C, &C->sets[min_j], min_j);
+
+            if (DEBUG){
+                MPI_Barrier(MPI_COMM_WORLD);
+                printf("cset successfully removed\n");
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
+            changes = true;
+
+        }else{
+            distance_matrix[min_i][min_j] = DBL_MAX;
+            distance_matrix[min_j][min_i] = DBL_MAX;
+        }
+
+        free(new_cset);
+
+        if (C->number_of_sets < K3){
+            stop_criteria =true;
+            break;
+        }
+
+        if (DEBUG){
+                MPI_Barrier(MPI_COMM_WORLD);
+                printf("Iteration %d performed, we will continue\n", iterations);
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
         iterations++;
     }
     
 
     // synchronize the processes
-    MPI_Barrier(MPI_COMM_WORLD);
+    if ( DEBUG ) {
+        MPI_Barrier(MPI_COMM_WORLD);
+        printf("Done hierchical clustering");
+    }
 
     // free the distance matrix
     for (i = 0; i < C->number_of_sets; i++) {
@@ -885,33 +1112,33 @@ void copy_clusters(Cluster *clusters, Cluster *clusters_copy) {
 
 int main(int argc, char** argv) {
 
-    if (argc != 2){
-        printf("Usage: %s <input_file>\n", argv[0]);
-        return 1;
-    }
+if (argc != 2){
+printf("Usage: %s <input_file>\n", argv[0]);
+return 1;
+}
 
-    int rank, size;
+int rank, size;
 
-    //set the number of threads
-    omp_set_num_threads(NUMBER_OF_THREADS);
+//set the number of threads
+omp_set_num_threads(NUMBER_OF_THREADS);
 
-    // Initialize the MPI environment
-    MPI_Init(&argc, &argv);
-    // catch exceptions
-    if (MPI_Comm_rank(MPI_COMM_WORLD, &rank) != MPI_SUCCESS) {
-        printf("Error: MPI_Comm_rank\n");
-        exit(1);
-    }
+// Initialize the MPI environment
+MPI_Init(&argc, &argv);
+// catch exceptions
+if (MPI_Comm_rank(MPI_COMM_WORLD, &rank) != MPI_SUCCESS) {
+printf("Error: MPI_Comm_rank\n");
+exit(1);
+}
 
-    if (MPI_Comm_size(MPI_COMM_WORLD, &size) != MPI_SUCCESS) {
-        printf("Error: MPI_Comm_size\n");
-        exit(1);
-    }
+if (MPI_Comm_size(MPI_COMM_WORLD, &size) != MPI_SUCCESS) {
+printf("Error: MPI_Comm_size\n");
+exit(1);
+}
 
-    if (DEBUG) {
-        printf("Starting Parallel BFR.\n");
-        printf("Hello from %d of %d\n", rank, size);
-    }
+if (DEBUG) {
+printf("Starting Parallel BFR.\n");
+printf("Hello from %d of %d\n", rank, size);
+}
 
     //initialize the clusters the retained set and the compressed sets
     Cluster *clusters = (Cluster *)malloc(K * sizeof(Cluster));
@@ -923,122 +1150,122 @@ int main(int argc, char** argv) {
     // keep a cluster copy to keep track of each round's additions
     Cluster *clusters_copy = (Cluster *)malloc(K * sizeof(Cluster));
 
-    //initialize the data streams from the input files
-    data_streamer stream_cursor;
-    if (rank == MASTER) {
-        stream_cursor = data_streamer_Init(argv[1], "r");
-    }
+//initialize the data streams from the input files
+data_streamer stream_cursor;
+if (rank == MASTER) {
+stream_cursor = data_streamer_Init(argv[1], "r");
+}
     
-    //data buffer used by each node
-    Point data_buffer[DATA_BUFFER_SIZE];
+//data buffer used by each node
+Point data_buffer[DATA_BUFFER_SIZE];
 
-    //data buffer used by MASTER to fill other node's buffers
-    Point data_buffer_master[MAX_SIZE_OF_BUFFER];
+//data buffer used by MASTER to fill other node's buffers
+Point data_buffer_master[MAX_SIZE_OF_BUFFER];
 
-    int offset;
-    int round = 0;
+int offset;
+int round = 0;
 
-    //use derived datatype to send the clusters to all processes
-    MPI_Datatype ArrayclusterType; // array of cluster
-    // MPI_Datatype RetainedSetType;
-    MPI_Datatype PointType;
+//use derived datatype to send the clusters to all processes
+MPI_Datatype ArrayclusterType; // array of cluster
+// MPI_Datatype RetainedSetType;
+MPI_Datatype PointType;
 
     definePointType(&PointType);
     defineArrayclusterType(&ArrayclusterType, PointType);
     // defineRetainedSetType(&RetainedSetType);
 
-    int stop_criteria = 0;
-    long node_data_buffer_size = 0, size_of_data_buffer_copy = 0;
-    do{
-        // update the offset for each node
-        offset = rank * DATA_BUFFER_SIZE + round * size * DATA_BUFFER_SIZE;
-        if (rank == MASTER) {
-            long size_of_data_buffer = 0;
-            if(DEBUG) printf("Loading buffer.\n");
-            if (!load_data_buffer(stream_cursor, data_buffer_master, MAX_SIZE_OF_BUFFER, &size_of_data_buffer)){
-                stop_criteria = 0;
-                size_of_data_buffer_copy = size_of_data_buffer;
-            }
+int stop_criteria = 0;
+long node_data_buffer_size = 0, size_of_data_buffer_copy = 0;
+do{
+// update the offset for each node
+offset = rank * DATA_BUFFER_SIZE + round * size * DATA_BUFFER_SIZE;
+if (rank == MASTER) {
+long size_of_data_buffer = 0;
+if(DEBUG) printf("Loading buffer.\n");
+if (!load_data_buffer(stream_cursor, data_buffer_master, MAX_SIZE_OF_BUFFER, &size_of_data_buffer)){
+stop_criteria = 0;
+size_of_data_buffer_copy = size_of_data_buffer;
+}
             else {
-                stop_criteria = 1;
-            }
+stop_criteria = 1;
+}
             
-            if(DEBUG) printf("Stop criteria is %d.\n", stop_criteria);
-            if (!stop_criteria) {
-                if(DEBUG) printf("Computing points per node.\n");
-                // pass the correct number of points to each node
-                long points_per_node = size_of_data_buffer/size;
-                if (points_per_node < MIN_DATA_BUFFER_SIZE_LAST_ROUND) {
-                    points_per_node = MIN_DATA_BUFFER_SIZE_LAST_ROUND;
-                }
+if(DEBUG) printf("Stop criteria is %d.\n", stop_criteria);
+if (!stop_criteria) {
+if(DEBUG) printf("Computing points per node.\n");
+// pass the correct number of points to each node
+long points_per_node = size_of_data_buffer/size;
+if (points_per_node < MIN_DATA_BUFFER_SIZE_LAST_ROUND) {
+points_per_node = MIN_DATA_BUFFER_SIZE_LAST_ROUND;
+}
                 // if (points_per_node > DATA_BUFFER_SIZE) {
-                //     points_per_node = DATA_BUFFER_SIZE;
-                // }
-                long points_per_node_all = points_per_node;
+//     points_per_node = DATA_BUFFER_SIZE;
+// }
+long points_per_node_all = points_per_node;
                 
-                if(DEBUG) printf("Setting own number of points and initializing own data point buffer.\n");
-                // set own number of data points to parse and initialize point buffer
-                node_data_buffer_size = points_per_node;
-                if (size_of_data_buffer - points_per_node < 0) {
-                    node_data_buffer_size = size_of_data_buffer;
-                }
+if(DEBUG) printf("Setting own number of points and initializing own data point buffer.\n");
+// set own number of data points to parse and initialize point buffer
+node_data_buffer_size = points_per_node;
+if (size_of_data_buffer - points_per_node < 0) {
+node_data_buffer_size = size_of_data_buffer;
+}
 
-                if(DEBUG) printf("Own number of points is %d, DATA_BUFFER_SIZE is %d.\n", node_data_buffer_size, DATA_BUFFER_SIZE);
-                // copy values from master buffer to master's data buffer
-                int l;
-                for (l = 0; l < node_data_buffer_size; l++) {
-                    data_buffer[l] = data_buffer_master[l];
-                }
+if(DEBUG) printf("Own number of points is %d, DATA_BUFFER_SIZE is %d.\n", node_data_buffer_size, DATA_BUFFER_SIZE);
+// copy values from master buffer to master's data buffer
+int l;
+for (l = 0; l < node_data_buffer_size; l++) {
+data_buffer[l] = data_buffer_master[l];
+}
                 
-                size_of_data_buffer -= points_per_node;
+size_of_data_buffer -= points_per_node;
                 
-                if(DEBUG) printf("Computing points to assign to each node. Points per node: %d, data buffer size: %d.\n", points_per_node, node_data_buffer_size);
+if(DEBUG) printf("Computing points to assign to each node. Points per node: %d, data buffer size: %d.\n", points_per_node, node_data_buffer_size);
                 
-                int i;
-                for (i = 1; i < size && size_of_data_buffer > 0; i++) {
-                    // send stop_criteria = false
-                    MPI_Send(&stop_criteria, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+int i;
+for (i = 1; i < size && size_of_data_buffer > 0; i++) {
+// send stop_criteria = false
+MPI_Send(&stop_criteria, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
 
                     // compute number of points to send
                     if (size_of_data_buffer - points_per_node < 0 || i == size - 1) {
                         points_per_node = size_of_data_buffer;
                     }
 
-                    // send number of points that are sent
-                    MPI_Send(&points_per_node, 1, MPI_LONG, i, 0, MPI_COMM_WORLD);
+// send number of points that are sent
+MPI_Send(&points_per_node, 1, MPI_LONG, i, 0, MPI_COMM_WORLD);
 
-                    // send points
-                    Point *data_buffer_temp = data_buffer_master + i*points_per_node_all;
-                    MPI_Send(data_buffer_temp, points_per_node, PointType, i, 0, MPI_COMM_WORLD);
+// send points
+Point *data_buffer_temp = data_buffer_master + i*points_per_node_all;
+MPI_Send(data_buffer_temp, points_per_node, PointType, i, 0, MPI_COMM_WORLD);
 
-                    size_of_data_buffer -= points_per_node;
-                }
+size_of_data_buffer -= points_per_node;
+}
                 
-                // update new active node size to be correct
-                int j, newsize = i;
-                if(DEBUG) printf("New size of active nodes is %d.\n", newsize);
-                for (j = 1; j < newsize; j++){
-                    MPI_Send(&newsize, 1, MPI_INT, j, 0, MPI_COMM_WORLD);
-                }
+// update new active node size to be correct
+int j, newsize = i;
+if(DEBUG) printf("New size of active nodes is %d.\n", newsize);
+for (j = 1; j < newsize; j++){
+MPI_Send(&newsize, 1, MPI_INT, j, 0, MPI_COMM_WORLD);
+}
 
-                if(DEBUG) printf("Stopping %d nodes as they are not needed.\n", size - i);
-                int stop_criterion_last_round = 1;
-                // the remaining nodes receive stop_criteria = true and exit BFR.
-                for (; i < size; i++){
-                    MPI_Send(&stop_criterion_last_round, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-                }
+if(DEBUG) printf("Stopping %d nodes as they are not needed.\n", size - i);
+int stop_criterion_last_round = 1;
+// the remaining nodes receive stop_criteria = true and exit BFR.
+for (; i < size; i++){
+MPI_Send(&stop_criterion_last_round, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+}
 
-                // update self size
-                size = newsize;
-                // if(DEBUG) printf("Stop criteria is %d.\n", stop_criteria);
-            }
+// update self size
+size = newsize;
+// if(DEBUG) printf("Stop criteria is %d.\n", stop_criteria);
+}
             else {
-                // data buffer can't be loaded, communicate status to all nodes
-                if(DEBUG) printf("Data buffer can't be loaded, communicating status to all nodes.\n");
-                int i;        
-                for (i = 1; i < size; i++) {
-                    MPI_Send(&stop_criteria, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-                }
+// data buffer can't be loaded, communicate status to all nodes
+if(DEBUG) printf("Data buffer can't be loaded, communicating status to all nodes.\n");
+int i;        
+for (i = 1; i < size; i++) {
+MPI_Send(&stop_criteria, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+}
             }
         }
         else {
@@ -1058,30 +1285,30 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (!stop_criteria) {
+if (!stop_criteria) {
 
-            if(DEBUG) printf("\n%d: Starting round %d.\n", rank, round);
-            if (round == 0) {
-                // init of the clusters made by the master
-                if (rank == MASTER) {
-                    if(DEBUG) printf("Initializing clusters and centroids.\n");
-                    // free clusters as they will be reinitialized in initClustersWithCentroids()
-                    free(clusters);
-                    // init the clusters with the centroids
-                    // can be done as multithreaded version
-                    // as reference to implement see take_k_centorids() in serial version
-                    // use the whole first buffer to ensure that results are equal to serial version
-                    clusters = initClustersWithCentroids(data_buffer_master, size_of_data_buffer_copy, K, M);
+if(DEBUG) printf("\n%d: Starting round %d.\n", rank, round);
+if (round == 0) {
+// init of the clusters made by the master
+if (rank == MASTER) {
+if(DEBUG) printf("Initializing clusters and centroids.\n");
+// free clusters as they will be reinitialized in initClustersWithCentroids()
+free(clusters);
+// init the clusters with the centroids
+// can be done as multithreaded version
+// as reference to implement see take_k_centorids() in serial version
+// use the whole first buffer to ensure that results are equal to serial version
+clusters = initClustersWithCentroids(data_buffer_master, size_of_data_buffer_copy, K, M);
 
                     print_clusters(clusters);
 
-                    if(DEBUG) printf("Sending clusters info to other nodes.\n");
-                    int i;        
-                    for (i = 1; i < size; i++) {
-                        //TODO: adjust this send and next receive
-                        if(DEBUG) printf("Sending clusters info to node %d.\n", i);
-                        MPI_Send(clusters, K, ArrayclusterType, i, 0, MPI_COMM_WORLD);
-                    }
+if(DEBUG) printf("Sending clusters info to other nodes.\n");
+int i;        
+for (i = 1; i < size; i++) {
+//TODO: adjust this send and next receive
+if(DEBUG) printf("Sending clusters info to node %d.\n", i);
+MPI_Send(clusters, K, ArrayclusterType, i, 0, MPI_COMM_WORLD);
+}
                 } else {
                     if(DEBUG) printf("\n%d: Receiving clusters info from MASTER.\n", rank);
                     // receive the clusters from the master
@@ -1102,7 +1329,7 @@ int main(int argc, char** argv) {
                 // create a temporary clusters to store the clusters from the other processes   
                 Cluster *tempClusters;
 
-                tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
+tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
 
                 int i = 1;
                 for (; i < size; i++) {
@@ -1144,10 +1371,10 @@ int main(int argc, char** argv) {
                 // send the clusters to the master
                 MPI_Send(clusters, K, ArrayclusterType, MASTER, 0, MPI_COMM_WORLD);
 
-                //create a temporary clusters to store the clusters from the master
-                Cluster *tempClusters;
+//create a temporary clusters to store the clusters from the master
+Cluster *tempClusters;
 
-                tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
+tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
 
                 if(DEBUG) printf("\n%d: Receiving updated clusters.\n", rank);
                 // receive the updated clusters from the master
@@ -1174,7 +1401,7 @@ int main(int argc, char** argv) {
             copy_clusters(clusters, clusters_copy);
 
             // TODO: we need to decide if the retained set and the compressed sets should be updated in the master or keep in the local processes
-            // in the first case we need to send the retained set and the compressed sets to the master and then the master will update the retained set and the compressed sets
+// in the first case we need to send the retained set and the compressed sets to the master and then the master will update the retained set and the compressed sets
 
             if(DEBUG) printf("Reducing Retained Set.\n");
             // Reducing the retained set, by gathering the retained set from the other processes and updating the retained set
@@ -1184,18 +1411,18 @@ int main(int argc, char** argv) {
                 tempRetainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
                 tempRetainedSet->number_of_points = 0;
 
-                int i = 1;
-                for (; i < size; i++) {
-                    if(DEBUG) printf("Receiving Retained Set from node %d.\n", i);
-                    MPI_Recv(&(tempRetainedSet->number_of_points), 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    tempRetainedSet->points = (Point *)malloc(tempRetainedSet->number_of_points * sizeof(Point));
-                    MPI_Recv(tempRetainedSet->points, tempRetainedSet->number_of_points, PointType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                    // update the retained set with the retained set from the other processes
-                    if(DEBUG) printf("Updating Retained Set with the one received from node %d.\n", i);
-                    UpdateRetainedSet(retainedSet, tempRetainedSet);
+int i = 1;
+for (; i < size; i++) {
+if(DEBUG) printf("Receiving Retained Set from node %d.\n", i);
+MPI_Recv(&(tempRetainedSet->number_of_points), 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+tempRetainedSet->points = (Point *)malloc(tempRetainedSet->number_of_points * sizeof(Point));
+MPI_Recv(tempRetainedSet->points, tempRetainedSet->number_of_points, PointType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+// update the retained set with the retained set from the other processes
+if(DEBUG) printf("Updating Retained Set with the one received from node %d.\n", i);
+UpdateRetainedSet(retainedSet, tempRetainedSet);
 
-                    free(tempRetainedSet->points);
-                }
+free(tempRetainedSet->points);
+}
 
                 free(tempRetainedSet);
             } else {
@@ -1205,16 +1432,16 @@ int main(int argc, char** argv) {
                 if(DEBUG) printf("\n%d: Sending Retained Set to MASTER.\n", rank);
                 MPI_Send(retainedSet->points, retainedSet->number_of_points, PointType, MASTER, 0, MPI_COMM_WORLD);
 
-                free(retainedSet->points);
-                // free(retainedSet);
+free(retainedSet->points);
+// free(retainedSet);
 
-                // retainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
-                retainedSet_normal = init_retained_set();
-                retainedSet = &retainedSet_normal; 
-                retainedSet->number_of_points = 0;
-            }
+// retainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
+retainedSet_normal = init_retained_set();
+retainedSet = &retainedSet_normal; 
+retainedSet->number_of_points = 0;
+}
 
-            // TODO: perform the secondary compression criteria in parallel version
+// TODO: perform the secondary compression criteria in parallel version
             
             // TODO: insert the kmeans clustering in the parallel version, implemented in "kmeans.c"
             secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size, PointType);
@@ -1224,16 +1451,16 @@ int main(int argc, char** argv) {
                 retainedSet->points = NULL;
             }
 
-            // TODO: filtering of cluster in the master by tightness criterion
+// TODO: filtering of cluster in the master by tightness criterion
 
-            // TODO: merge the clusters in the compressed sets in the master
+// TODO: merge the clusters in the compressed sets in the master
 
-            // TODO: perform the hierachical clustering in parallel version
+// TODO: perform the hierachical clustering in parallel version
 
             // hierachical_clust_parallel(compressedSets, rank, size);
 
 
-            // TODO: synchronize the processes
+// TODO: synchronize the processes
 
             if (rank == MASTER) {
                 if(DEBUG) print_clusters(clusters);
@@ -1245,19 +1472,19 @@ int main(int argc, char** argv) {
         }
     }while(!stop_criteria);
     
-    // Close the input file
-    if (rank == MASTER) {
-        fclose((FILE*)stream_cursor);
-    }
+// Close the input file
+if (rank == MASTER) {
+fclose((FILE*)stream_cursor);
+}
 
-    if (rank == MASTER) {
-        // TODO: try merge compressed sets with clusters in the master, using tightness criterion evaluate if the clusters can be merged
-    }
+if (rank == MASTER) {
+// TODO: try merge compressed sets with clusters in the master, using tightness criterion evaluate if the clusters can be merged
+}
 
-    if (rank == MASTER) {
-        // print the results
-        PlotResults(clusters, retainedSet, compressedSets);
-    }
+if (rank == MASTER) {
+// print the results
+PlotResults(clusters, retainedSet, compressedSets);
+}
     
     if(DEBUG) printf("%d: Freeing data.\n", rank);
     if (clusters != NULL) {
@@ -1269,21 +1496,21 @@ int main(int argc, char** argv) {
         free(clusters_copy);    
     }
     if (retainedSet->points != NULL) {
-        if(DEBUG) printf("%d: Freeing retainedSet points.\n", rank);
-        free(retainedSet->points);
-    }
+if(DEBUG) printf("%d: Freeing retainedSet points.\n", rank);
+free(retainedSet->points);
+}
     if (compressedSets->sets != NULL) {
-        if(DEBUG) printf("%d: Freeing compressedSets sets.\n", rank);
-        free(compressedSets->sets);
-    }
+if(DEBUG) printf("%d: Freeing compressedSets sets.\n", rank);
+free(compressedSets->sets);
+}
 
-    if(DEBUG) printf("%d: Freeing MPI datatypes.\n", rank);
-    // free the derived datatypes
-    MPI_Type_free(&ArrayclusterType);
-    // MPI_Type_free(&RetainedSetType);
-    MPI_Type_free(&PointType);
+if(DEBUG) printf("%d: Freeing MPI datatypes.\n", rank);
+// free the derived datatypes
+MPI_Type_free(&ArrayclusterType);
+// MPI_Type_free(&RetainedSetType);
+MPI_Type_free(&PointType);
 
-    // Finalize the MPI environment
-    MPI_Finalize();
-    return 0;
+// Finalize the MPI environment
+MPI_Finalize();
+return 0;
 }
