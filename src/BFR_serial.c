@@ -281,7 +281,7 @@ bool primary_compression_criteria(Cluster * clusters, Cluster * clusters_copy, P
 
     if (min_distance < T){
         if(DEBUG) printf("      Minimal distance is %lf and is under threshold, updating cluster %d with point.\n", min_distance, min_cluster);
-        if(1) printf("  Adding point %lf %lf to cluster %d.\n", p.coords[0], p.coords[1], min_cluster);
+        if(DEBUG) printf("  Adding point %lf %lf to cluster %d.\n", p.coords[0], p.coords[1], min_cluster);
         //add point to cluster whose distance from the centroid is minimal, if distance != 0. (the point is not the starting centroid)
         if(min_distance != 0.) update_cluster(&clusters[min_cluster], p);
         if(DEBUG) printf("      Cluster %d updated.\n", min_cluster);
@@ -423,7 +423,7 @@ void stream_data(RetainedSet * R, Cluster * clusters, Cluster * clusters_copy, C
         if(DEBUG) printf("  Checking primary compression criteria for point %lf %lf.\n", p.coords[0], p.coords[1]);
 
         if (!primary_compression_criteria(clusters, clusters_copy, p)){
-            if(1) printf("  Adding point %lf %lf to RetainedSet.\n", p.coords[0], p.coords[1]);
+            if(DEBUG) printf("  Adding point %lf %lf to RetainedSet.\n", p.coords[0], p.coords[1]);
             if(DEBUG) printf("  Primary compression criteria not applicable, adding to Retained Set.\n");
             // if not, add point to retained set
             add_point_to_retained_set(R, p);
@@ -447,6 +447,7 @@ void copy_clusters(Cluster *clusters, Cluster *clusters_copy) {
     */
     int i, d;
     for (i = 0; i < K; i++){
+        clusters_copy[i].centroid = clusters[i].centroid;
         clusters_copy[i].size = clusters[i].size;
         clusters_copy[i].index = clusters[i].index;
         for (d = 0; d < M; d++){
