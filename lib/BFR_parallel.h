@@ -17,7 +17,7 @@ void add_point_to_cluster(Cluster *c, Point p);
 void remove_cset_from_compressed_sets(CompressedSets *C, CompressedSet * c, int index);
 
 bool primary_compression_criteria(Cluster *clusters, Point p) ;
-void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *compressedSets, int rank, int size);
+void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *compressedSets, int rank, int size, MPI_Datatype PointType);
 
 CompressedSet *merge_cset(CompressedSet *c1, CompressedSet *c2);
 

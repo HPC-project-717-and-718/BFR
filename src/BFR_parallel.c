@@ -11,7 +11,7 @@ bool UpdateCentroidsMultithr(Cluster *clusters, int index, int number_of_cluster
     // the function has the same structure of the serial version but in multithreaded version
     int i, j;
     // printf("New coords:");
-    # pragma omp parallel for shared(clusters, index, number_of_clusters, dimension)
+    // # pragmaa omp parallel for shared(clusters, index, number_of_clusters, dimension)
     for (j = 0; j < dimension; j++) {
         clusters[index].centroid.coords[j] = clusters[index].sum[j] / clusters[index].size;
         // printf(" %lf", clusters[index].centroid.coords[j]);    
@@ -45,7 +45,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int number_of_c
     centroids[0] = data_buffer[random_index];
 
     int j;
-    # pragma omp parallel for shared(clusters, data_buffer, random_index)
+    // # pragmaa omp parallel for shared(clusters, data_buffer, random_index)
     for (j = 0; j < dimension; j++) {
         clusters[0].sum[j] = centroids[0].coords[j];
         clusters[0].sum_squares[j] = centroids[0].coords[j] * centroids[0].coords[j];
@@ -61,7 +61,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int number_of_c
         float farthest_distance = 0;
         int j;
         // multithread the for loop to find the farthest point from the previous centroids
-        # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index, farthest_distance)
+        // # pragmaa omp parallel for shared(clusters, data_buffer, farthest_point_index, farthest_distance)
         for (j = 0; j < size; j++) {
             float current_distance = 0;
             int k;
@@ -70,7 +70,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int number_of_c
                 current_distance += distance((Pointer) & centroids[k], (Pointer) & data_buffer[j]);
             }
             // critical section to update the farthest point
-            # pragma omp critical
+            // # pragmaa omp critical
             if (current_distance > farthest_distance) {
                 farthest_distance = current_distance;
                 farthest_point_index = j;
@@ -81,7 +81,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int number_of_c
         centroids[i] = data_buffer[farthest_point_index];
 
         // multithread the for loop to update the sum and sum_square of the cluster
-        # pragma omp parallel for shared(clusters, data_buffer, farthest_point_index)
+        // # pragmaa omp parallel for shared(clusters, data_buffer, farthest_point_index)
         for (j = 0; j < dimension; j++) {
             clusters[i].sum[j] = data_buffer[farthest_point_index].coords[j];
             clusters[i].sum_squares[j] = data_buffer[farthest_point_index].coords[j] * data_buffer[farthest_point_index].coords[j];
@@ -219,14 +219,18 @@ bool primary_compression_criteria(Cluster *clusters, Point p) {
     */
 
     int i = 0, min_cluster;
-    double current_distance, min_distance = DBL_MAX;
+    double min_distance = DBL_MAX;
+    if(DEBUG) {
+        // printf("      Clusters BEFORE.\n");
+        // print_clusters(clusters);
+    }
 
     if(DEBUG) printf("      Checking mahalanobis distance for point.\n");
-    # pragma omp parallel for shared(min_distance, min_cluster, clusters, p)
+    // # pragmaa omp parallel for shared(min_distance, min_cluster, clusters, p)
     for (i = 0; i < K; i++){
-        current_distance = mahalanobis_distance(clusters[i], p);
-        // if(DEBUG) printf("      Current distance: %lf.\n", current_distance);
-        # pragma omp critical
+        double current_distance = mahalanobis_distance(clusters[i], p);
+        if(DEBUG) printf("      Current distance: %lf.\n", current_distance);
+        // # pragma omp critical
         if (current_distance < min_distance) {
             min_distance = current_distance;
             min_cluster = i;
@@ -243,15 +247,22 @@ bool primary_compression_criteria(Cluster *clusters, Point p) {
     
     if(DEBUG) printf("      No cluster fits the criteria, minimal distance is %lf.\n", min_distance);
 
+    // if(DEBUG) printf("      Clusters AFTER.\n");
+    // print_clusters(clusters);
+
     return false;
 }
 
 
-Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size){
+Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size, MPI_Datatype PointType){
 
     if(DEBUG && rank == MASTER) printf("          Initializing standard kmeans data.\n");
     Cluster * miniclusters = init_cluster((*k));
 
+    if(DEBUG && rank == MASTER) printf("          Broadcasting number of retainedSet points: %d.\n", (*R).number_of_points);
+    MPI_Bcast(&((*R).number_of_points), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+    if(rank != MASTER) R->points = (Point *)malloc(R->number_of_points * sizeof(Point)); 
+    MPI_Bcast(R->points, R->number_of_points, PointType, MASTER, MPI_COMM_WORLD);
     // TODO: discuss a correct limit for not running standard kmeans
     // as of now, do not run kmeans if the number of points is < k
     // we may want to run kmeans when we have more than k*constant number of points
@@ -267,6 +278,7 @@ Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size){
         kmeans_result result = kmeans(&config);
 
         if(DEBUG) printf("          Iteration count: %d\n", config.total_iterations);
+        if(DEBUG) printf("          Num objs: %d\n", config.num_objs);
         if(DEBUG) printf("          Transferring kmeans cluster data to miniclusters.\n");
         
         int i;
@@ -324,10 +336,10 @@ Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size){
 
         // update miniclusters' centroids
         update_centroids(&miniclusters, (*k));
-
     }
     else{
         kmeans(&config);
+        (*k) = 0;
         free(config.objs);
         free(config.centers);
         free(config.clusters);
@@ -337,7 +349,7 @@ Cluster *cluster_retained_set_thrs(RetainedSet *R, int *k, int rank, int size){
     return miniclusters;
 }
 
-void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *compressedSets, int rank, int size) {
+void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet, CompressedSets *compressedSets, int rank, int size, MPI_Datatype PointType) {
     // TODO: implement the function
     /*
     * Description:
@@ -363,7 +375,7 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
     // 1. cluster retained set R with classical K-Means, creating k2 clusters, also keep in R the outlayers
     // TODO: implement the function K-Means with open mp
     int k2 = K;
-    Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, &k2, rank, size);
+    Cluster *k2_clusters = cluster_retained_set_thrs(retainedSet, &k2, rank, size, PointType);
 
     // 2. clusters that have a tightness measure above a certain threshold are added to the CompressedSet C 
     // using open mp
@@ -393,7 +405,7 @@ void UpdateRetainedSet(RetainedSet *R, RetainedSet *tempRetainedSet){
 
     int i;
     for (i = 0; i < tempRetainedSet->number_of_points; i++){
-        R->points[old_number_of_points - 1 + i] = tempRetainedSet->points[i];
+        R->points[old_number_of_points + i] = tempRetainedSet->points[i];
     }
 }
 
@@ -813,6 +825,28 @@ void definePointType(MPI_Datatype *PointType) {
     MPI_Type_commit(PointType);
 }
 
+void copy_clusters(Cluster *clusters, Cluster *clusters_copy) {
+    /*
+        typedef struct {
+            Point centroid;
+            int size;
+            double sum[M];
+            double sum_squares[M];
+            int index;
+        } Cluster;
+    */
+    int i, d;
+    # pragma omp parallel for private(d)
+    for (i = 0; i < K; i++){
+        clusters_copy[i].size = clusters[i].size;
+        clusters_copy[i].index = clusters[i].index;
+        for (d = 0; d < M; d++){
+            clusters_copy[i].sum[d] = clusters[i].sum[d];
+            clusters_copy[i].sum_squares[d] = clusters[i].sum_squares[d];
+        }
+    }
+}
+
 int main(int argc, char** argv) {
 
     if (argc != 2){
@@ -850,6 +884,9 @@ int main(int argc, char** argv) {
     RetainedSet *retainedSet = &retainedSet_normal;
     CompressedSets *compressedSets = &compressedSets_normal;
 
+    // keep a cluster copy to keep track of each round's additions
+    Cluster *clusters_copy = (Cluster *)malloc(K * sizeof(Cluster));
+
     //initialize the data streams from the input files
     data_streamer stream_cursor;
     if (rank == MASTER) {
@@ -873,8 +910,6 @@ int main(int argc, char** argv) {
     definePointType(&PointType);
     defineArrayclusterType(&ArrayclusterType, PointType);
     // defineRetainedSetType(&RetainedSetType);
-
-    // TODO: implement the derived datatype for the cluster and for the Retained Set
 
     int stop_criteria = 0;
     long node_data_buffer_size = 0, size_of_data_buffer_copy = 0;
@@ -929,7 +964,7 @@ int main(int argc, char** argv) {
                     MPI_Send(&stop_criteria, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
 
                     // compute number of points to send
-                    if (size_of_data_buffer - points_per_node < 0) {
+                    if (size_of_data_buffer - points_per_node < 0 || i == size - 1) {
                         points_per_node = size_of_data_buffer;
                     }
 
@@ -976,8 +1011,13 @@ int main(int argc, char** argv) {
             if(DEBUG) printf("\n%d: Received stop criteria %d.\n", rank, stop_criteria);
             if (!stop_criteria){
                 // node can receive points
+                if(DEBUG) printf("\n%d: Receiving points.\n", rank);
 			    MPI_Recv(&node_data_buffer_size, 1, MPI_LONG, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                if(DEBUG) printf("\n%d: Node data buffer size: %d.\n", rank, node_data_buffer_size);
 			    MPI_Recv(&data_buffer, node_data_buffer_size, PointType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+                if(DEBUG) printf("\n%d: Receiving new size of active nodes.\n", rank);
 			    MPI_Recv(&size, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             }
         }
@@ -997,7 +1037,9 @@ int main(int argc, char** argv) {
                     // use the whole first buffer to ensure that results are equal to serial version
                     clusters = initClustersWithCentroids(data_buffer_master, size_of_data_buffer_copy, K, M);
 
-                    // print_clusters(clusters);
+                    copy_clusters(clusters, clusters_copy);
+
+                    print_clusters(clusters);
 
                     if(DEBUG) printf("Sending clusters info to other nodes.\n");
                     int i;        
@@ -1013,9 +1055,6 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // increment the round
-            round = round + 1;
-
             if(DEBUG) printf("Streaming points.\n");
             // perform primary compression criteria
             StreamPoints(clusters, compressedSets, retainedSet, data_buffer, node_data_buffer_size);
@@ -1023,6 +1062,7 @@ int main(int argc, char** argv) {
             // the master process gets the clusters data from the other processes
             // and updates the clusters
             if (rank == MASTER) {
+                if(DEBUG) printf("Receiving clusters.\n");
                 // the master receives the clusters from the other processes
                 // create a temporary clusters to store the clusters from the other processes   
                 Cluster *tempClusters;
@@ -1031,54 +1071,94 @@ int main(int argc, char** argv) {
 
                 int i = 1;
                 for (; i < size; i++) {
-                    MPI_Recv(tempClusters, 1, ArrayclusterType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    MPI_Recv(tempClusters, K, ArrayclusterType, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                     // update the clusters with the clusters from the other processes
                     // TODO: is important to acknowledge that after the first round the values of the clusters for each M should be erased, if not the clusters will be updated readding also the values of the previous rounds but only the master will have the correct values
-                    int j, d;
 
-                    # pragma omp parallel for shared(tempClusters, clusters) private(d)
+                    // The effective change for each cluster equals the node's clusters - the last copy's values 
+                    int j, d;
+                    # pragma omp parallel for shared(tempClusters, clusters, clusters_copy) private(d)
                     for (j = 0; j < K; j++) {
-                        // TODO: NAIVE IMPLEMENTATION revise
-                        clusters[j].size += (tempClusters[j].size - 1);
+                        clusters[j].size += (tempClusters[j].size - clusters_copy[j].size);
                         for (d = 0; d < M; d++) {
-                            clusters[j].sum[d] += tempClusters[j].sum[d];
-                            clusters[j].sum_squares[d] += tempClusters[j].sum_squares[d];
+                            clusters[j].sum[d] += (tempClusters[j].sum[d] - clusters_copy[j].sum[d]);
+                            clusters[j].sum_squares[d] += (tempClusters[j].sum_squares[d] - clusters_copy[j].sum_squares[d]);
                         }
                     }
                 }
                 free(tempClusters);
+                if(DEBUG) printf("Updating centroids.\n");
                 for (i = 0; i < K; i++) {
                     // update the clusters
                     UpdateCentroidsMultithr(clusters, i, K, M);
                 }
+
+                copy_clusters(clusters, clusters_copy);
+                print_clusters(clusters);
+
                 // send the updated clusters to the other processes
-                
-                # pragma omp parallel for shared(clusters)
+                if(DEBUG) printf("Sending updated clusters.\n");
                 for (i = 1; i < size; i++) {
-                    MPI_Send(clusters, 1, ArrayclusterType, i, 0, MPI_COMM_WORLD);
+                    MPI_Send(clusters, K, ArrayclusterType, i, 0, MPI_COMM_WORLD);
                 }
+                    // MPI_Barrier(MPI_COMM_WORLD);
+                    // MPI_Barrier(MPI_COMM_WORLD);
+                    // MPI_Barrier(MPI_COMM_WORLD);
+                    // MPI_Barrier(MPI_COMM_WORLD);
             } else {
+                if(DEBUG) printf("\n%d: Sending own clusters.\n", rank);
                 // send the clusters to the master
-                MPI_Send(clusters, 1, ArrayclusterType, MASTER, 0, MPI_COMM_WORLD);
+                MPI_Send(clusters, K, ArrayclusterType, MASTER, 0, MPI_COMM_WORLD);
 
                 //create a temporary clusters to store the clusters from the master
                 Cluster *tempClusters;
 
                 tempClusters = (Cluster *)malloc(K * sizeof(Cluster));
 
+                if(DEBUG) printf("\n%d: Receiving updated clusters.\n", rank);
                 // receive the updated clusters from the master
-                MPI_Recv(tempClusters,1, ArrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                MPI_Recv(tempClusters, K, ArrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
                 // update the clusters centroids with the clusters from the master
-                int j = 0;
-                for (; j < K; j++) {
-                    // clusters[j].size += tempClusters[j].size;
-                    clusters[j].size = 1;
+                int j, d;
+                # pragma omp parallel for shared(tempClusters, clusters) private(d)
+                for (j = 0; j < K; j++) {
+                    clusters[j].size = tempClusters[j].size;
+                    // clusters[j].size = 1;
                     clusters[j].centroid = tempClusters[j].centroid;
+                    for (d = 0; d < M; d++) {
+                        clusters[j].sum[d] = tempClusters[j].sum[d];
+                        clusters[j].sum_squares[d] = tempClusters[j].sum_squares[d];
+                    }                    
                 }
+                // if(DEBUG) {
+                //     MPI_Barrier(MPI_COMM_WORLD);
+                //     if (rank == 1) {
+                //         printf("\n%d: Printing clusters.\n", rank);
+                //         print_clusters(clusters);
+                //     }
+                //     MPI_Barrier(MPI_COMM_WORLD);
+                //     if (rank == 2) {
+                //         printf("\n%d: Printing clusters.\n", rank);
+                //         print_clusters(clusters);
+                //     }
+                // }
 
+                if(DEBUG) printf("\n%d: Freeing tempClusters.\n", rank);
                 free(tempClusters);
 
+                // if(DEBUG) {
+                //     MPI_Barrier(MPI_COMM_WORLD);
+                //     if (rank == 1) {
+                //         printf("\n%d: Reprinting clusters.\n", rank);
+                //         print_clusters(clusters);
+                //     }
+                //     MPI_Barrier(MPI_COMM_WORLD);
+                //     if (rank == 2) {
+                //         printf("\n%d: Reprinting clusters.\n", rank);
+                //         print_clusters(clusters);
+                //     }
+                // }
                 // erase the values of the clusters for each M in the array sum and sum_square
                 j = 0;
                 for (; j < K; j++) {
@@ -1099,6 +1179,7 @@ int main(int argc, char** argv) {
                 // reduce the retained set
                 RetainedSet *tempRetainedSet;
                 tempRetainedSet = (RetainedSet *)malloc(sizeof(RetainedSet));
+                tempRetainedSet->number_of_points = 0;
 
                 int i = 1;
                 for (; i < size; i++) {
@@ -1115,8 +1196,10 @@ int main(int argc, char** argv) {
 
                 free(tempRetainedSet);
             } else {
+                if(DEBUG) printf("\n%d: Sending number of points to MASTER: %d.\n", rank, retainedSet->number_of_points);
                 // send the retained set and its size to the master
                 MPI_Send(&(retainedSet->number_of_points), 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
+                if(DEBUG) printf("\n%d: Sending Retained Set to MASTER.\n", rank);
                 MPI_Send(retainedSet->points, retainedSet->number_of_points, PointType, MASTER, 0, MPI_COMM_WORLD);
 
                 free(retainedSet->points);
@@ -1131,7 +1214,12 @@ int main(int argc, char** argv) {
             // TODO: perform the secondary compression criteria in parallel version
             
             // TODO: insert the kmeans clustering in the parallel version, implemented in "kmeans.c"
-            secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size);
+            secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size, PointType);
+            if (rank != MASTER) {
+                retainedSet->number_of_points = 0;
+                free(retainedSet->points);
+                retainedSet->points = NULL;
+            }
 
             // TODO: filtering of cluster in the master by tightness criterion
 
@@ -1139,24 +1227,28 @@ int main(int argc, char** argv) {
 
             // TODO: perform the hierachical clustering in parallel version
 
-            hierachical_clust_parallel(compressedSets, rank, size);
+            // hierachical_clust_parallel(compressedSets, rank, size);
 
 
             // TODO: synchronize the processes
 
             if (rank == MASTER) {
-                if(DEBUG) {
-                    printf("Round %d\n", round);
-                    int i, j;
-                    for (i = 0; i < K; i++) {
-                        printf("Cluster %d: ", i);
-                        for (j = 0; j < M; j++) {
-                            printf("%f ", clusters[i].centroid.coords[j]);
-                        }
-                        printf("\n");
-                    }
-                }
+                // if(DEBUG) print_clusters(clusters);
+                // if(DEBUG) {
+                //     printf("Round %d\n", round);
+                //     int i, j;
+                //     for (i = 0; i < K; i++) {
+                //         printf("Cluster %d: ", i);
+                //         for (j = 0; j < M; j++) {
+                //             printf("%lf ", clusters[i].centroid.coords[j]);
+                //         }
+                //         printf("\n");
+                //     }
+                // }
             }
+
+            // increment the round
+            round = round + 1;
 
         }
     }while(!stop_criteria);
@@ -1179,6 +1271,10 @@ int main(int argc, char** argv) {
     if (clusters != NULL) {
         if(DEBUG) printf("%d: Freeing clusters.\n", rank);
         free(clusters);    
+    }
+    if (clusters_copy != NULL) {
+        if(DEBUG) printf("%d: Freeing clusters_copy.\n", rank);
+        free(clusters_copy);    
     }
     if (retainedSet->points != NULL) {
         if(DEBUG) printf("%d: Freeing retainedSet points.\n", rank);

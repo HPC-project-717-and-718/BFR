@@ -4,11 +4,11 @@
 #include <time.h>
 #include <sys/time.h>
 
-#include "kmeans.h"
+#include "../lib/kmeans/kmeans.h"
 
 
 // the euclidean distance has been modified to fit normal kmeans' requirements
-double distance(const Pointer a, const Pointer b){
+double distance_own(const Pointer a, const Pointer b){
     /*
     * Calculate euclidean distance between two points
     *
@@ -37,7 +37,7 @@ double distance(const Pointer a, const Pointer b){
     return sum;
 }
 
-static void centroid(const Pointer * objs, const int * clusters, size_t num_objs, int cluster, Pointer centroid){
+static void centroid_own(const Pointer * objs, const int * clusters, size_t num_objs, int cluster, Pointer centroid){
     /*
     * Given a collection of objects categorized by cluster, returns their centroid
     *
@@ -250,8 +250,8 @@ main(int argc, char **argv)
 	config.k = k;
 	config.num_objs = config.k * nptsincluster;
 	config.max_iterations = 200;
-	config.distance_method = distance_parallel;
-	config.centroid_method = centroid_parallel;
+	config.distance_method = distance_own;
+	config.centroid_method = centroid_own;
 
 	/* Inputs for K-means */
 	config.objs = calloc(config.num_objs, sizeof(Pointer));
@@ -353,8 +353,8 @@ main(int argc, char **argv)
 		}
 
 		config.parallel = false;
-		config.distance_method = distance;
-		config.centroid_method = centroid;
+		config.distance_method = distance_own;
+		config.centroid_method = centroid_own;
 		
 		/* run k-means! */
 		start = time(NULL);

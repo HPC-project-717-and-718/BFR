@@ -10,8 +10,8 @@
 module load mpich-3.2
 module load valgrind-3.15.0 
 OMP_NUM_THREADS=2 mpirun.actual -n 3 valgrind --track-origins=yes --leak-check=full --verbose HPC/BFR/src/BFR_parallel.o HPC/BFR/data/synthetic/synthetic_d2_4000points_2gaussians.txt > HPC/BFR/output.txt 2>&1 # Full debug setup
-# OMP_NUM_THREADS=2 mpirun.actual -n 3 valgrind HPC/BFR/src/BFR_parallel.o HPC/BFR/data/synthetic/synthetic_d2.txt > HPC/BFR/output.txt 2>&1 # Debug setup
-# OMP_NUM_THREADS=2 mpirun.actual -n 3 HPC/BFR/src/BFR_parallel.o HPC/BFR/data/synthetic/synthetic_d2.txt 
+# OMP_NUM_THREADS=2 mpirun.actual -n 3 valgrind HPC/BFR/src/BFR_parallel.o HPC/BFR/data/synthetic/synthetic_d2_4000points_2gaussians.txt > HPC/BFR/output.txt 2>&1 # Debug setup
+# OMP_NUM_THREADS=2 mpirun.actual -n 3 HPC/BFR/src/BFR_parallel.o HPC/BFR/data/synthetic/synthetic_d2_4000points_2gaussians.txt 
 
 # poi esegui "qsub bfr_parallel.sh"
 # non eseguire MAI manualmente!!
