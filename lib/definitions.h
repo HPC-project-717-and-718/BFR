@@ -11,7 +11,7 @@
 #include <string.h>
 
 #define K 2                                     // number of clusters
-#define M 2                                     // number of dimensions
+#define M 10                                     // number of dimensions
 #define S 100                                   // sample size
 #define T 3.5                                   // threshold
 #define LIMIT_S 10                              // limit for rand generation of coordinates for initial centroids
@@ -20,8 +20,9 @@
 #define DEBUG 1                                 // turn on/off debug prints
 #define data_streamer FILE *                    // data streamer type
 #define BETA 4                                  // beta parameter for BFR algorithm
+#define DBL_MAX 10000.
 
-// #define KMEANS_THREADED                         // comment out for serial version
+#define KMEANS_THREADED                         // comment out for serial version
 
 # define MASTER 0
 # define NUMBER_OF_THREADS 4
