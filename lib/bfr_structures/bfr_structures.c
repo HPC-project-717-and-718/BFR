@@ -789,7 +789,7 @@ void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclu
                 if(DEBUG) printf("Finished adding new combinations containing new set.\n");
             }
         }
-        if (is_empty_pqueue(&pq)){
+        if (is_empty_pqueue(&pq) || pq.size <= K3){
             stop_merging = true;
         }
         if (hd != NULL) free(hd);

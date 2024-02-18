@@ -178,7 +178,7 @@ bool tightness_evaluation_cluster(Cluster c, int * tightness_flag, int index){
     //if tighteness_flag[index] 0 is not computed, compute it
     //if tighteness_flag[index] 1 is computed, and is false
     //if tighteness_flag[index] 2 is computed, and is true
-    if(DEBUG) printf("              Evaluating tightness for minicluster %d.\n", index);
+    // if(DEBUG) printf("              Evaluating tightness for minicluster %d.\n", index);
     if (tightness_flag[index] == 0){
         if (c.size < 2){
             tightness_flag[index] = 1;
@@ -200,7 +200,7 @@ bool tightness_evaluation_cluster(Cluster c, int * tightness_flag, int index){
                 max_value = value;
             }
         }
-        if(DEBUG) printf("              Max value for tightness constraint: %lf.\n", max_value);
+        // if(DEBUG) printf("              Max value for tightness constraint: %lf.\n", max_value);
         if (max_value < BETA){
             tightness_flag[index] = 2;
             return true;

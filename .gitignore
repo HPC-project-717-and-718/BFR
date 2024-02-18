@@ -1,6 +1,7 @@
 #ignore output results, for now
 /output/output.txt
 !/output/.gitkeep
+output.txt
 
 #ignore binaries
 /src/bfr_serial
@@ -13,3 +14,7 @@ bfr_serial.sh.*
 
 #ignore data
 /data
+
+#ignore cluster result files
+bfr_parallel.sh.*
+bfr_serial.sh.*
