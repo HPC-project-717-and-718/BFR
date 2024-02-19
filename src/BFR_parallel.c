@@ -548,7 +548,7 @@ void remove_cset_from_compressed_sets(CompressedSets *C, int index1, int index2)
     int old_number_of_sets = C->number_of_sets;
     C->number_of_sets -= 2;
     // ALERT: c'era già una funzione per inizializzare i compressed sets, staticamente. Quindi visto che questi son dichiarati dinamicamente prevedo che delle free falliscano
-
+    // printf("Merging %d and %d.\n", index1, index2);
     int i, counter = 0;
     CompressedSet * temp_sets = (CompressedSet *)malloc(C->number_of_sets * sizeof(CompressedSet));
     for (i = 0; i < old_number_of_sets; i++) {

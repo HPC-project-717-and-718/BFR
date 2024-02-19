@@ -753,7 +753,7 @@ void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclu
 
     int number_of_merges = 0;
     // naive implementation of hierchical clustering over miniclusters and compressed sets
-    while (!stop_merging){
+    while (!stop_merging && pq.size > K3){
         // if(DEBUG) print_priorityqueue(pq);
         // top element of priority queue
         hierc_element * hd = top_from_pqueue(pq);
@@ -770,6 +770,7 @@ void merge_compressedsets_and_miniclusters(CompressedSets * C, Cluster * miniclu
                 // free(cset_validity);
                 cset_validity = newtemp_cv;
 
+                if(DEBUG) printf("Merging %d and %d.\n", hd->index_of_cset_1, hd->index_of_cset_2);
                 remove_compressedset(C, hd->index_of_cset_1, hd->index_of_cset_2, &cset_validity);
 
                 remove_from_pqueue(&pq, hd->index_of_cset_1, hd->index_of_cset_2);
