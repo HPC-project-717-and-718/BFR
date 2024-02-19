@@ -1,5 +1,8 @@
 #include "../lib/bfr_helper_functions/bfr_helper_functions.h"
 
+clock_t start, end, sec_clock_start, sec_clock_end;
+double cpu_time_used, sec_clock_elapsed;
+
 void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_buffer){
     /*
     * Take K random centroids from input space
@@ -383,10 +386,24 @@ void secondary_compression_criteria(RetainedSet * R, Cluster * clusters, Compres
     // TODO: decide the number of clusters. for now, set as K but by specs should be k2>K
     int number_of_miniclusters = K;
     Cluster *miniclusters = cluster_retained_set(R, &number_of_miniclusters);
+    if(DEBUG_TIME){
+        sec_clock_end = clock();
+        sec_clock_elapsed = ((double) (sec_clock_end - sec_clock_start)) / CLOCKS_PER_SEC;
+
+        printf("clustering ret set in time %lf\n", sec_clock_elapsed);
+    }
 
     if(DEBUG) printf("      Merging Compressed Sets and miniclusters and aggregating them, if possible.\n");
+    if (DEBUG_TIME){
+        sec_clock_start = clock();
+    }
     merge_compressedsets_and_miniclusters(C, miniclusters, number_of_miniclusters);
+    if(DEBUG_TIME){
+        sec_clock_end = clock();
+        sec_clock_elapsed = ((double) (sec_clock_end - sec_clock_start)) / CLOCKS_PER_SEC;
 
+        printf("hierarchical clustering in time %lf\n", sec_clock_elapsed);
+    }
 
     if(DEBUG) printf("      Freeing miniclusters.\n");
     free(miniclusters);
@@ -429,9 +446,18 @@ void stream_data(RetainedSet * R, Cluster * clusters, Cluster * clusters_copy, C
             add_point_to_retained_set(R, p);
         }
     }
+    if(DEBUG_TIME){
+        sec_clock_end = clock();
+        sec_clock_elapsed = ((double) (sec_clock_end - sec_clock_start)) / CLOCKS_PER_SEC;
+
+        printf("primary comp criteria in time %lf\n", sec_clock_elapsed);
+    }
 
     if(DEBUG) printf("  Checking secondary compression criteria.\n");
     // apply secondary compression criteria over retained set and compressed sets
+    if (DEBUG_TIME){
+        sec_clock_start = clock();
+    }
     secondary_compression_criteria(R, clusters, C);
 }
 
@@ -482,32 +508,62 @@ int main(int argc, char ** argv){
 
     //start reading block points from input file
     bool stop_criteria = false, first_round = true;
-    time_t start, end;
-    start = time(NULL);
+    start = clock();
     do{ 
         long size_of_data_buffer = 0;
         if(DEBUG) printf("Loading buffer.\n");
+
+        if (DEBUG_TIME){
+            sec_clock_start = clock();
+        }
         stop_criteria = load_data_buffer(stream_cursor, data_buffer, MAX_SIZE_OF_BUFFER, &size_of_data_buffer);
+        if(DEBUG_TIME){
+            sec_clock_end = clock();
+            sec_clock_elapsed = ((double) (sec_clock_end - sec_clock_start)) / CLOCKS_PER_SEC;
+
+            printf("input read and mapped in time %lf\n", sec_clock_elapsed);
+        }
 
         if(DEBUG) printf("Buffer loaded, stop criteria is %d\n", stop_criteria);
         if(stop_criteria == false){
 
             if(first_round) {
+                if (DEBUG_TIME){
+                    sec_clock_start = clock();
+                }
                 take_k_centroids(clusters, data_buffer, size_of_data_buffer);
                 copy_clusters(clusters, clusters_copy);
+                if(DEBUG_TIME){
+                    sec_clock_end = clock();
+                    sec_clock_elapsed = ((double) (sec_clock_end - sec_clock_start)) / CLOCKS_PER_SEC;
+
+                    printf("initializtion in time %lf\n", sec_clock_elapsed);
+                }
             }
 
             // printf("data buffer: %s\n", data_buffer);
             //stream data
             //TODO: proposition to change the name of this function, in order to make it more clear
             if(DEBUG) printf("Streaming data.\n");
+            if (DEBUG_TIME){
+                sec_clock_start = clock();
+            }
             stream_data(&R, clusters, clusters_copy, &C, data_buffer, size_of_data_buffer);
+            
 
             if(DEBUG) printf("Updating centroids.\n");
+            if (DEBUG_TIME){
+                sec_clock_start = clock();
+            }
             //update centroids
             update_centroids(&clusters, K);
-
             copy_clusters(clusters, clusters_copy);
+            if(DEBUG_TIME){
+                sec_clock_end = clock();
+                sec_clock_elapsed = ((double) (sec_clock_end - sec_clock_start)) / CLOCKS_PER_SEC;
+
+                printf("update cluster in time %lf\n", sec_clock_elapsed);
+            }
 
             if(DEBUG) printf("Printing.\n");
             //print clusters
@@ -527,8 +583,9 @@ int main(int argc, char ** argv){
         //     free(data_buffer);
         // }
     }while(stop_criteria == false);
-    end = time(NULL);
-    printf("Time elapsed: %lf", end-start);
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time elapsed: %lf\n", cpu_time_used);
 
     // decide what to do with remaining compressed sets and retained set:
     // for now, we will treat them as outliers.
