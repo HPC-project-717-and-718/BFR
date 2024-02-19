@@ -71,5 +71,5 @@ Compile the serial source code with:
 
 Compile the parallel source code with:
 
-```mpicc src/BFR_parallel.c lib/bfr_structures/bfr_structures.c lib/bfr_helper_functions/bfr_helper_functions.c lib/kmeans/kmeans.c -o src/BFR_parallel.o -lm -fopenmp```
+```mpicc src/BFR_parallel.c lib/bfr_structures/bfr_structures.c lib/bfr_helper_functions/bfr_helper_functions.c lib/kmeans/kmeans.c -o src/BFR_parallel -lm -fopenmp```
 

@@ -74,7 +74,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int number_of_c
     // choose the other number_of_clusters-1 centroids seeking the farthest point from the previous centroids
     for (i = 1; i < number_of_clusters; i++) {
         int farthest_point_index = 0;
-        double farthest_distance = 0;
+        double farthest_distance = 0.;
         double min_distance = DBL_MAX;
         int index_of_min = 0;
         int j;
@@ -122,7 +122,7 @@ Cluster *initClustersWithCentroids(Point *data_buffer, int size, int number_of_c
 
         // update the centroids of the clusters in multithreaded version
         UpdateCentroidsMultithr(clusters, i, number_of_clusters, dimension);
-        if(DEBUG) printf("Indexes of points chosen for cluster %d: %d %d.\n", i, farthest_point_index, index_of_min);
+        if(DEBUG) printf("Indexes of points and relative distances chosen for cluster %d: %d - %lf, %d - %lf.\n", i, farthest_point_index, farthest_distance, index_of_min, min_distance);
     }
     if(DEBUG){
         int j = 0;
@@ -459,7 +459,10 @@ void secondary_compression_criteria(Cluster *clusters, RetainedSet *retainedSet,
     add_miniclusters_to_compressedsets(compressedSets, k2_clusters, k2);
     // if (DEBUG){
     //     MPI_Barrier(MPI_COMM_WORLD);
-    //     if (rank == MASTER) print_compressedsets(*compressedSets);
+    //     if (rank == MASTER) {
+    //         printf("\n%d: Printing old compressed sets BEFORE.\n", rank);
+    //         print_compressedsets(*compressedSets);
+    //     }
     //     MPI_Barrier(MPI_COMM_WORLD);
     // }
     
@@ -648,6 +651,17 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
         }
         int start, number_of_sets;
 
+        // setup a new communicator
+        MPI_Comm has_sets_to_parse;
+        int color = (rank < C->number_of_sets) ? 1 : MPI_UNDEFINED;
+        MPI_Comm_split(MPI_COMM_WORLD, color, rank, &has_sets_to_parse);
+
+        int new_comm_rank, new_comm_size = 0;
+        if (rank < C->number_of_sets) {
+            MPI_Comm_rank(has_sets_to_parse, &new_comm_rank);
+            MPI_Comm_size(has_sets_to_parse, &new_comm_size);
+        }
+
         // 1. compute the distance matrix
         if (changes) {
             // free the distance matrix
@@ -711,20 +725,21 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
                 }
             }
 
-            if (DEBUG){
-                MPI_Barrier(MPI_COMM_WORLD);
-                if (rank == MASTER) print_compressedsets(*C);
-                MPI_Barrier(MPI_COMM_WORLD);
-                printf("node %d is starting to fill the distance vector\n", rank);
-                printf("node %d is starting from %d and has %d sets to parse\n", rank, start, number_of_sets);
-                // MPI_Barrier(MPI_COMM_WORLD);
-            }
+            // if (DEBUG){
+            //     MPI_Barrier(MPI_COMM_WORLD);
+            //     if (rank == MASTER) print_compressedsets(*C);
+            //     MPI_Barrier(MPI_COMM_WORLD);
+            //     printf("node %d is starting to fill the distance vector\n", rank);
+            //     printf("node %d is starting from %d and has %d sets to parse\n", rank, start, number_of_sets);
+            //     // MPI_Barrier(MPI_COMM_WORLD);
+            // }
 
             if (DEBUG) printf("%d: C size is %d\n", rank, C->number_of_sets);
             // for each process compute the distance vectors for the sets assigned
             int i, j;
             // # pragma omp parallel for shared(distance_matrix, C, start, number_of_sets) private(j)
             for (i = start; i < start + number_of_sets; i++) {
+                if (DEBUG)printf("\n%d: distance matrix i offset %d\n", rank, i);
                 for (j = 0; j < C->number_of_sets; j++) {
                     if (DEBUG) printf("%d: index i %d, j %d\n", rank, i, j);
                     double dist = dist_cset(C->sets[i],  C->sets[j]);
@@ -797,6 +812,7 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
             } else {
                 for(i = start; i < start + number_of_sets; i++) {
                     int size_of_dist_vector = C->number_of_sets-i;
+                    if (DEBUG)printf("%d: sending distance vector of size %d\n", rank, C->number_of_sets);
                     MPI_Send(distance_matrix[i], C->number_of_sets, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD);
                 }
 
@@ -813,7 +829,7 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
 
             //if(DEBUG)printf("checkpoint 1\n");
             for (i = 0; i < C->number_of_sets;i++){
-                MPI_Bcast(distance_matrix[i], C->number_of_sets, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+                MPI_Bcast(distance_matrix[i], C->number_of_sets, MPI_DOUBLE, MASTER, has_sets_to_parse);
             }     
 
             if (DEBUG && rank == 1){
@@ -874,6 +890,7 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
             double temp_min_distance;
             int temp_min_i, temp_min_j;
 
+            if (new_comm_size != 0) size = new_comm_size;
             for (i = 1; i < size; i++) {
                 MPI_Recv(&temp_min_distance, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 MPI_Recv(&temp_min_i, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -891,9 +908,9 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
             MPI_Send(&min_j, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
         }
 
-        MPI_Bcast(&min_distance, 1, MPI_DOUBLE, MASTER,  MPI_COMM_WORLD);
-        MPI_Bcast(&min_i, 1, MPI_INT, MASTER,  MPI_COMM_WORLD);
-        MPI_Bcast(&min_j, 1, MPI_INT, MASTER,  MPI_COMM_WORLD);
+        MPI_Bcast(&min_distance, 1, MPI_DOUBLE, MASTER,  has_sets_to_parse);
+        MPI_Bcast(&min_i, 1, MPI_INT, MASTER,  has_sets_to_parse);
+        MPI_Bcast(&min_j, 1, MPI_INT, MASTER,  has_sets_to_parse);
 
         if(DEBUG){
             // MPI_Barrier(MPI_COMM_WORLD);
@@ -976,9 +993,11 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
             new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
         }
 
-        MPI_Bcast(&(new_cset->number_of_points), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-        MPI_Bcast(&(new_cset->sum), M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
-        MPI_Bcast(&(new_cset->sum_square), M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+        MPI_Bcast(&(new_cset->number_of_points), 1, MPI_INT, MASTER, has_sets_to_parse);
+        MPI_Bcast(&(new_cset->sum), M, MPI_DOUBLE, MASTER, has_sets_to_parse);
+        MPI_Bcast(&(new_cset->sum_square), M, MPI_DOUBLE, MASTER, has_sets_to_parse);
+
+        MPI_Comm_free(&has_sets_to_parse);
         
 
         if (DEBUG){
@@ -1569,12 +1588,29 @@ int main(int argc, char **argv) {
             //     printf("\n%d: Printing old compressed sets.\n");
             //     print_compressedsets(*compressedSets);
             // }
-            if (compressedSets->number_of_sets >= K3) hierachical_clust_parallel(compressedSets, rank, size);
+            if (compressedSets->number_of_sets >= K3) {
+                // if (rank == MASTER){
+                //     printf("\n%d: Printing old compressed sets BEFORE.\n");
+                //     print_compressedsets(*compressedSets);
+                // }
+                hierachical_clust_parallel(compressedSets, rank, size);
             
-            if (DEBUG){
-                MPI_Barrier(MPI_COMM_WORLD);
-                if (rank == MASTER) print_compressedsets(*compressedSets);
-                MPI_Barrier(MPI_COMM_WORLD);
+                // reduce compressed sets to all nodes
+                // printf("\n%d: Broadcasting compressedSets' number_of_sets.\n", rank);
+                MPI_Bcast(&(compressedSets->number_of_sets), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+                if (rank != MASTER) {
+                    // printf("\n%d: Freeing sets.\n", rank);
+                    free(compressedSets->sets);
+                    // printf("\n%d: Reallocating sets.\n", rank);
+                    (*compressedSets).sets = (CompressedSet *)malloc(compressedSets->number_of_sets * sizeof(CompressedSet));
+                }
+                // printf("\n%d: Broadcasting compressedSets.\n", rank);
+                int i;
+                for (i = 0; i < compressedSets->number_of_sets; i++){
+                    MPI_Bcast(&(compressedSets->sets[i].number_of_points), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
+                    MPI_Bcast((*compressedSets).sets[i].sum, M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+                    MPI_Bcast((*compressedSets).sets[i].sum_square, M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+                }    
             }
             // TODO: synchronize the processes
 

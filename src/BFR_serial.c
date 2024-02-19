@@ -89,7 +89,7 @@ void take_k_centroids(Cluster *clusters, Point * data_buffer, long size_of_data_
             clusters[i].sum_squares[k] = pow(data_buffer[index_of_max].coords[k], 2) + pow(data_buffer[index_of_min].coords[k], 2);
         }
         clusters[i].size = 2;
-        if(DEBUG) printf("Indexes of points chosen for cluster %d: %d %d.\n", i, index_of_max, index_of_min);
+        if(DEBUG) printf("Indexes of points and relative distances chosen for cluster %d: %d - %lf, %d - %lf.\n", i, index_of_max, max_distance, index_of_min, min_distance);
     }
     if(DEBUG) printf("All centroids chosen.\n");
     update_centroids(&clusters, K);

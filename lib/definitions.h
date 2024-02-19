@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <string.h>
 
-#define K 2                                     // number of clusters
+#define K 10                                    // number of clusters
 #define M 2                                     // number of dimensions
 #define S 100                                   // sample size
 #define T 3.5                                   // threshold
@@ -23,7 +23,7 @@
 #define DBL_MAX_HC 10000.
 #define K3 3
 
-#define KMEANS_THREADED                         // comment out for serial version
+// #define KMEANS_THREADED                         // comment out for serial version
 
 # define MASTER 0
 # define NUMBER_OF_THREADS 4
