@@ -1,8 +1,11 @@
 // Description: This file contains the parallel implementation of the BFR algorithm.
 #include "../lib/BFR_parallel.h"
 
-// TODO: there will some problem here
+// TODO: there will some problem here I hear u bro
 
+// initialize time variables
+double local_start, local_finish, local_elapsed, elapsed;
+double sec_clock_start, sec_clock_end, sec_clock_elapsed;
 
 
 bool UpdateCentroidsMultithr(Cluster *clusters, int index, int number_of_clusters, int dimension) {
@@ -647,6 +650,8 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
             break;
         }
         int start, number_of_sets;
+        int rank_bound = size;
+        if (size > C->number_of_sets) rank = C-> number_of_sets;
 
         // 1. compute the distance matrix
         if (changes) {
@@ -711,14 +716,14 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
                 }
             }
 
-            if (DEBUG){
-                MPI_Barrier(MPI_COMM_WORLD);
-                if (rank == MASTER) print_compressedsets(*C);
-                MPI_Barrier(MPI_COMM_WORLD);
-                printf("node %d is starting to fill the distance vector\n", rank);
-                printf("node %d is starting from %d and has %d sets to parse\n", rank, start, number_of_sets);
-                // MPI_Barrier(MPI_COMM_WORLD);
-            }
+            // if (DEBUG){
+            //     MPI_Barrier(MPI_COMM_WORLD);
+            //     if (rank == MASTER) print_compressedsets(*C);
+            //     MPI_Barrier(MPI_COMM_WORLD);
+            //     printf("node %d is starting to fill the distance vector\n", rank);
+            //     printf("node %d is starting from %d and has %d sets to parse\n", rank, start, number_of_sets);
+            //     // MPI_Barrier(MPI_COMM_WORLD);
+            // }
 
             if (DEBUG) printf("%d: C size is %d\n", rank, C->number_of_sets);
             // for each process compute the distance vectors for the sets assigned
@@ -810,10 +815,19 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
                 // if (DEBUG) printf("node %d receveid the distance from the master");
             }  
             // if (DEBUG) MPI_Barrier(MPI_COMM_WORLD);
+            
+            
 
             //if(DEBUG)printf("checkpoint 1\n");
             for (i = 0; i < C->number_of_sets;i++){
-                MPI_Bcast(distance_matrix[i], C->number_of_sets, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+                if(rank == MASTER) { // If this is the master process
+                    int p;
+                    for(p = 1; p < rank_bound; p++) {
+                        MPI_Send(distance_matrix[i], C->number_of_sets, MPI_DOUBLE, p, 0, MPI_COMM_WORLD);
+                    }
+                } else if(rank < rank_bound) { // If this is a process with rank less than rank_bound
+                    MPI_Recv(distance_matrix[i], C->number_of_sets, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                }
             }     
 
             if (DEBUG && rank == 1){
@@ -874,7 +888,7 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
             double temp_min_distance;
             int temp_min_i, temp_min_j;
 
-            for (i = 1; i < size; i++) {
+            for (i = 1; i < rank_bound; i++) {
                 MPI_Recv(&temp_min_distance, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 MPI_Recv(&temp_min_i, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 MPI_Recv(&temp_min_j, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -891,9 +905,18 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
             MPI_Send(&min_j, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD);
         }
 
-        MPI_Bcast(&min_distance, 1, MPI_DOUBLE, MASTER,  MPI_COMM_WORLD);
-        MPI_Bcast(&min_i, 1, MPI_INT, MASTER,  MPI_COMM_WORLD);
-        MPI_Bcast(&min_j, 1, MPI_INT, MASTER,  MPI_COMM_WORLD);
+        
+        if(rank == MASTER) { // If this is the master process
+            for(i = 1; i < rank_bound; i++) {
+                MPI_Send(&min_distance, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+                MPI_Send(&min_i, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+                MPI_Send(&min_j, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            }
+        } else if(rank < rank_bound) { // If this is a process with rank less than rank_bound
+            MPI_Recv(&min_distance, 1, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&min_i, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&min_j, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
 
         if(DEBUG){
             // MPI_Barrier(MPI_COMM_WORLD);
@@ -976,9 +999,17 @@ bool hierachical_clust_parallel(CompressedSets *C, int rank, int size){
             new_cset = merge_cset(&(C->sets[min_i]), &(C->sets[min_j]));
         }
 
-        MPI_Bcast(&(new_cset->number_of_points), 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-        MPI_Bcast(&(new_cset->sum), M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
-        MPI_Bcast(&(new_cset->sum_square), M, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+        if(rank == MASTER) { // If this is the master process
+            for(i = 1; i < rank_bound; i++) {
+                MPI_Send(&(new_cset->number_of_points), 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+                MPI_Send(&(new_cset->sum), M, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+                MPI_Send(&(new_cset->sum_square), M, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            }
+        } else if(rank < rank_bound) { // If this is a process with rank less than rank_bound
+            MPI_Recv(&(new_cset->number_of_points), 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&(new_cset->sum), M, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&(new_cset->sum_square), M, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
         
 
         if (DEBUG){
@@ -1213,10 +1244,17 @@ int main(int argc, char **argv) {
 
     int stop_criteria = 0;
     long node_data_buffer_size = 0, size_of_data_buffer_copy = 0;
+
+    //initialization finished start measuring time
+    MPI_Barrier(MPI_COMM_WORLD);
+    local_start = MPI_Wtime();
     do
     {
         // update the offset for each node
         offset = rank * DATA_BUFFER_SIZE + round * size * DATA_BUFFER_SIZE;
+        if (DEBUG_TIME){
+            sec_clock_start = MPI_Wtime();
+        }
         if (rank == MASTER)
         {
             long size_of_data_buffer = 0;
@@ -1350,14 +1388,25 @@ int main(int argc, char **argv) {
                 MPI_Recv(&size, 1, MPI_INT, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             }
         }
+        if(DEBUG_TIME){
+            sec_clock_end = MPI_Wtime();
+            sec_clock_elapsed = sec_clock_end - sec_clock_start;
+            MPI_Reduce(&sec_clock_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+            if (rank== MASTER)printf("input read and mapped in time %lf\n", sec_clock_elapsed);
+        }
 
         if (!stop_criteria)
         {
 
             if (DEBUG)
                 printf("\n%d: Starting round %d.\n", rank, round);
+            
             if (round == 0)
             {
+                if (DEBUG_TIME){
+                    sec_clock_start = MPI_Wtime();
+                }
                 // init of the clusters made by the master
                 if (rank == MASTER)
                 {
@@ -1392,15 +1441,35 @@ int main(int argc, char **argv) {
                     MPI_Recv(clusters, K, ArrayclusterType, MASTER, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 }
                 copy_clusters(clusters, clusters_copy);
+                if(DEBUG_TIME){
+                    sec_clock_end = MPI_Wtime();
+                    sec_clock_elapsed = sec_clock_end - sec_clock_start;
+                    MPI_Reduce(&sec_clock_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+                    if (rank== MASTER)printf("initializtion in time %lf\n", sec_clock_elapsed);
+                }
             }
+
 
             if (DEBUG)
                 printf("Streaming points.\n");
+            if (DEBUG_TIME){
+                sec_clock_start = MPI_Wtime();
+            }
             // perform primary compression criteria
             StreamPoints(clusters, clusters_copy, compressedSets, retainedSet, data_buffer, node_data_buffer_size);
+            if(DEBUG_TIME){
+                sec_clock_end = MPI_Wtime();
+                sec_clock_elapsed = sec_clock_end - sec_clock_start;
+                MPI_Reduce(&sec_clock_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
+                if (rank== MASTER)printf("primary comp criteria in time %lf\n", sec_clock_elapsed);
+            }
             // the master process gets the clusters data from the other processes
             // and updates the clusters
+            if (DEBUG_TIME){
+                sec_clock_start = MPI_Wtime();
+            }
             if (rank == MASTER)
             {
                 if (DEBUG)
@@ -1495,8 +1564,16 @@ int main(int argc, char **argv) {
                 free(tempClusters);
             }
 
+
             // use a "freezed version" of the clusters to measure distances
             copy_clusters(clusters, clusters_copy);
+            if(DEBUG_TIME){
+                sec_clock_end = MPI_Wtime();
+                sec_clock_elapsed = sec_clock_end - sec_clock_start;
+                MPI_Reduce(&sec_clock_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+                if (rank== MASTER)printf("update cluster in time %lf\n", sec_clock_elapsed);
+            }
 
             // TODO: we need to decide if the retained set and the compressed sets should be updated in the master or keep in the local processes
             // in the first case we need to send the retained set and the compressed sets to the master and then the master will update the retained set and the compressed sets
@@ -1504,6 +1581,9 @@ int main(int argc, char **argv) {
             if (DEBUG)
                 printf("Reducing Retained Set.\n");
             // Reducing the retained set, by gathering the retained set from the other processes and updating the retained set
+            if (DEBUG_TIME){
+                sec_clock_start = MPI_Wtime();
+            }
             if (rank == MASTER)
             {
                 // reduce the retained set
@@ -1547,9 +1627,18 @@ int main(int argc, char **argv) {
                 retainedSet = &retainedSet_normal;
                 retainedSet->number_of_points = 0;
             }
+            if(DEBUG_TIME){
+                sec_clock_end = MPI_Wtime();
+                sec_clock_elapsed = sec_clock_end - sec_clock_start;
+                MPI_Reduce(&sec_clock_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+                if (rank== MASTER)printf("reducing ret set in time %lf\n", sec_clock_elapsed);
+            }
 
             // TODO: perform the secondary compression criteria in parallel version
-
+            if (DEBUG_TIME){
+                sec_clock_start = MPI_Wtime();
+            }
             // TODO: insert the kmeans clustering in the parallel version, implemented in "kmeans.c"
             secondary_compression_criteria(clusters, retainedSet, compressedSets, rank, size, PointType);
             if (rank != MASTER)
@@ -1557,6 +1646,14 @@ int main(int argc, char **argv) {
                 retainedSet->number_of_points = 0;
                 free(retainedSet->points);
                 retainedSet->points = NULL;
+            }
+
+            if(DEBUG_TIME){
+                sec_clock_end = MPI_Wtime();
+                sec_clock_elapsed = sec_clock_end - sec_clock_start;
+                MPI_Reduce(&sec_clock_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+                if (rank== MASTER)printf("clustering ret set in time %lf\n", sec_clock_elapsed);
             }
 
             // TODO: filtering of cluster in the master by tightness criterion
@@ -1569,13 +1666,22 @@ int main(int argc, char **argv) {
             //     printf("\n%d: Printing old compressed sets.\n");
             //     print_compressedsets(*compressedSets);
             // }
-            if (compressedSets->number_of_sets >= K3) hierachical_clust_parallel(compressedSets, rank, size);
-            
-            if (DEBUG){
-                MPI_Barrier(MPI_COMM_WORLD);
-                if (rank == MASTER) print_compressedsets(*compressedSets);
-                MPI_Barrier(MPI_COMM_WORLD);
+            if (DEBUG_TIME){
+                sec_clock_start = MPI_Wtime();
             }
+            if (compressedSets->number_of_sets >= K3) hierachical_clust_parallel(compressedSets, rank, size);
+            if(DEBUG_TIME){
+                sec_clock_end = MPI_Wtime();
+                sec_clock_elapsed = sec_clock_end - sec_clock_start;
+                MPI_Reduce(&sec_clock_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+                if (rank== MASTER)printf("hierarchical clustering in time %lf\n", sec_clock_elapsed);
+            }
+            // if (DEBUG){
+            //     MPI_Barrier(MPI_COMM_WORLD);
+            //     if (rank == MASTER) print_compressedsets(*compressedSets);
+            //     MPI_Barrier(MPI_COMM_WORLD);
+            // }
             // TODO: synchronize the processes
 
             if (rank == MASTER)
@@ -1588,17 +1694,46 @@ int main(int argc, char **argv) {
             round = round + 1;
         }
     } while (!stop_criteria);
+    // stop measuring time
+    // initialize time variables
+    local_finish = MPI_Wtime();
 
+    local_elapsed = local_finish - local_start;
+
+    MPI_Reduce(&local_elapsed, &elapsed, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+
+    // printf("node %d finished the program bye bye\n", rank);
+
+    MPI_Barrier(MPI_COMM_WORLD);   
+    // Print time elapsed
+    if (rank == MASTER)
+    {   
+        printf("The maximum elapsed time is: %f\n", elapsed);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    double sum;
+    MPI_Reduce(&local_elapsed, &sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    double avg;
+    if(rank == 0) { // If this is the root process
+        avg = sum / size; // num_processes is the total number of processes
+        printf("The average elapsed time is: %f\n", avg);
+    }
+
+    if (rank ==0){
+        double secPerRound= avg/round;
+        printf("Time per round: %f\n", secPerRound);
+    }
     // Close the input file
     if (rank == MASTER)
-    {
+    {   
         fclose((FILE *)stream_cursor);
     }
 
-    if (rank == MASTER)
-    {
-        // TODO: try merge compressed sets with clusters in the master, using tightness criterion evaluate if the clusters can be merged
-    }
+    // if (rank == MASTER)
+    // {
+    //     // TODO: try merge compressed sets with clusters in the master, using tightness criterion evaluate if the clusters can be merged
+    // }
 
     if (rank == MASTER)
     {

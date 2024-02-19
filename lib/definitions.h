@@ -18,6 +18,7 @@
 #define MAX_SIZE_OF_BUFFER 1000                 // max size of buffer in points
 #define NORMAL_KMEANS_MAX_ITERATIONS 200        // max number of normal kmeans iterations
 #define DEBUG 0                                 // turn on/off debug prints
+#define DEBUG_TIME 1
 #define data_streamer FILE *                    // data streamer type
 #define BETA 4                                  // beta parameter for BFR algorithm
 #define DBL_MAX_HC 10000.

@@ -482,6 +482,8 @@ int main(int argc, char ** argv){
 
     //start reading block points from input file
     bool stop_criteria = false, first_round = true;
+    time_t start, end;
+    start = time(NULL);
     do{ 
         long size_of_data_buffer = 0;
         if(DEBUG) printf("Loading buffer.\n");
@@ -525,6 +527,8 @@ int main(int argc, char ** argv){
         //     free(data_buffer);
         // }
     }while(stop_criteria == false);
+    end = time(NULL);
+    printf("Time elapsed: %lf", end-start);
 
     // decide what to do with remaining compressed sets and retained set:
     // for now, we will treat them as outliers.
